@@ -4,15 +4,25 @@ import hashlib
 from typing import List, Tuple, Optional
 
 import numpy as np
-import tiktoken
 from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer
+import torch
 
 from treesitter import TreeSitterManager
 from qdrant import QdrantManager
 
 # ---------------- config / models ----------------
-enc = tiktoken.get_encoding("cl100k_base")  # example
-model = SentenceTransformer("all-MiniLM-L6-v2")  # compact model example
+JINA_MODEL = "jinaai/jina-code-embeddings-0.5b"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = SentenceTransformer(
+    JINA_MODEL,
+    device=device,
+    model_kwargs={"dtype": torch.bfloat16},
+    tokenizer_kwargs={"padding_side": "left"},
+)
+
+tokenizer = AutoTokenizer.from_pretrained(JINA_MODEL, trust_remote_code=True, use_fast=True)
 
 # ---------------- utilities ----------------
 def file_sha1_text(text: str) -> str:
@@ -20,7 +30,13 @@ def file_sha1_text(text: str) -> str:
 
 
 def count_tokens(text: str) -> int:
-    return len(enc.encode(text))
+    """
+    Use the model tokenizer to count tokens for chunking.
+    This is more accurate than tiktoken for Jina models.
+    """
+    # don't truncate here — only count
+    tokens = tokenizer(text, return_attention_mask=False, add_special_tokens=True)
+    return len(tokens["input_ids"])
 
 
 def is_binary(path: Path) -> bool:
@@ -60,26 +76,29 @@ def iterate_source_files(root: Path, extentions: List[str] = None, exclude_dirs:
 def chunk_text_by_tokens(text: str, max_tokens: int = 512, overlap: int = 64) -> List[Tuple[int, int, str]]:
     """
     Returns list of (start_token_index, end_token_index, chunk_text)
-    Fixed: avoid infinite loop when text has fewer tokens than overlap or overlap >= max_tokens.
+    using the tokenizer so indices align with tokenization used for embeddings.
+    This implementation is simple: it tokenizes then decodes token slices.
     """
     if max_tokens <= 0:
         raise ValueError("max_tokens must be > 0")
-    # clamp overlap
     if overlap >= max_tokens:
         overlap = max(1, max_tokens - 1)
 
-    tok_ids = enc.encode(text)
-    chunks = []
-    i = 0
-    n = len(tok_ids)
+    # tokenize (get ids)
+    enc = tokenizer(text, return_tensors=None, add_special_tokens=True, truncation=False)
+    token_ids = enc["input_ids"]
+    n = len(token_ids)
     if n == 0:
         return []
 
+    chunks = []
+    i = 0
     while i < n:
         j = min(i + max_tokens, n)
         # Take slice [i:j)
-        chunk_tok_ids = tok_ids[i:j]
-        chunk_text = enc.decode(chunk_tok_ids)
+        chunk_tok_ids = token_ids[i:j]
+        # decode token slice back to string
+        chunk_text = tokenizer.decode(chunk_tok_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         chunks.append((i, j, chunk_text))
 
         # If we reached the end, break (prevents reset to 0)
@@ -94,7 +113,7 @@ def chunk_text_by_tokens(text: str, max_tokens: int = 512, overlap: int = 64) ->
         i = next_i
 
     # return token index ranges and chunk text; caller currently uses only chunk_text.
-    return [(s, e, c) for (s, e, c) in chunks]
+    return chunks
 
 
 
@@ -111,6 +130,7 @@ def process_repo_and_upsert_qdrant(root_path: str,
     for file_path in iterate_source_files(root):
         try:
             text = file_path.read_text(encoding="utf-8", errors="ignore")
+            print(f"DEBUG: Processing {file_path.relative_to(root)}")
         except Exception as e:
             print(f"Skipping {file_path}: read error: {e}")
             continue
@@ -140,15 +160,16 @@ def process_repo_and_upsert_qdrant(root_path: str,
         if not docs:
             continue
 
-        embeddings = model.encode(docs, show_progress_bar=False, convert_to_numpy=True)
+        embeddings = model.encode(
+            docs,
+            prompt_name="code2code_document",
+            show_progress_bar=True,
+            convert_to_numpy=True
+        )
         if isinstance(embeddings, list):
             embeddings = np.array(embeddings)
         if embeddings.ndim == 1:
             embeddings = embeddings.reshape(1, -1)
-
-        vector_dim = int(embeddings.shape[1])
-        # ensure collection once per repo (cached inside manager)
-        q_mgr.ensure_collection(vector_dim)
 
         for idx, (rel_path, fn_name, doc_text) in enumerate(chunks_texts):
             metadata = {
@@ -177,6 +198,8 @@ if __name__ == "__main__":
 
     qdrant_manager = QdrantManager(QDRANT_URL, QDRANT_API_KEY, COLLECTION_NAME)
     ts_manager = TreeSitterManager()
+
+    qdrant_manager.init_collection(896) # default embedding vector dimension for jina-code-embeddings-0.5b
 
     n = process_repo_and_upsert_qdrant(root, ts_manager, qdrant_manager, max_tokens=512, overlap=64)
     print(f"Upserted {n} chunks into Qdrant collection '{COLLECTION_NAME}'.")

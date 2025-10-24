@@ -1,9 +1,7 @@
-import os
 from qdrant_client import QdrantClient
-# Альтернативный импорт PointStruct:
 from qdrant_client.http.models import PointStruct, Distance, VectorParams
 from qdrant_client.http.exceptions import UnexpectedResponse
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Optional
 import uuid
 
 
@@ -23,20 +21,14 @@ class QdrantManager:
         self.batch_size = batch_size
         self._points_buffer: List[PointStruct] = []
         self._total_upserted = 0
-        self._checked_collections = set()
         self._vector_size: Optional[int] = None
 
-    def ensure_collection(self, vector_size: int, distance: Distance = Distance.COSINE):
-        """Create collection if missing. Caches existence to reduce repeated checks."""
-
-        if self.collection_name in self._checked_collections:
-            return
+    def init_collection(self, vector_size: int, distance: Distance = Distance.COSINE):
+        """Initializes Qdrant collection of points."""
 
         collections = self.client.get_collections().collections
         if any(col.name == self.collection_name for col in collections):
             print(f"Collection '{self.collection_name}' already exists.")
-            self._checked_collections.add(self.collection_name)
-            self._vector_size = vector_size if self._vector_size is None else self._vector_size
             return
 
         print(f"Creating Qdrant collection '{self.collection_name}' (vector_size={vector_size}) ...")
@@ -44,7 +36,6 @@ class QdrantManager:
             collection_name=self.collection_name,
             vectors_config=VectorParams(size=vector_size, distance=distance),
         )
-        self._checked_collections.add(self.collection_name)
         self._vector_size = vector_size
         print("Created collection.")
 

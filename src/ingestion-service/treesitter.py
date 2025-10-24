@@ -1,6 +1,3 @@
-# Encapsulate tree-sitter language registry, parser cache and extraction logic
-# Usage: create TreeSitterManager(), then call .extract_functions_or_blocks(text, file_path)
-
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from collections import deque
@@ -29,7 +26,7 @@ class TreeSitterManager:
     - Provide extraction helpers like extract_functions_or_blocks(text, file_path).
 
     The manager is conservative: for languages that don't have "function" nodes it
-    returns an empty list so callers can fallback to file-level chunking.
+    returns an empty list so callers can fall back to file-level chunking.
     """
 
     def __init__(self):
