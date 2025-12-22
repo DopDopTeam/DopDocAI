@@ -2,23 +2,31 @@ from dataclasses import dataclass
 from typing import Literal
 import requests
 
+# Конфиг для запроса
 @dataclass(frozen=True)
 class LLMConfig:
     model: str
     temperature: float
     max_tokens: int
 
+'''
+system -> как отвечать
+user -> что сделать
+assistant -> что было (память)
+'''
 @dataclass
 class LLMMessage:
     role: Literal["system", "user", "assistant"]
     content: str
 
+# Нужен для трекинга токенов, они не бесконечные
 @dataclass
 class LLMUsage:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
 
+# Сериализация ответов нейронки
 @dataclass
 class LLMResponse:
     text: str
