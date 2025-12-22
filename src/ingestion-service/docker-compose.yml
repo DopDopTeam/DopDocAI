@@ -7,6 +7,6 @@ services:
       - "6333:6333"  # REST API
       - "6334:6334"  # optional UI/metrics
     volumes:
-      - ./qdrant_storage:/qdrant/storage
+      - ./qdrant_storage:/qdrant/utils
     environment:
       - QDRANT__SERVICE__STORAGE_TYPE=rocksdb
