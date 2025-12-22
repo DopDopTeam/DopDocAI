@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from collections import deque
 
 from tree_sitter import Language, Parser
@@ -35,13 +35,10 @@ class TreeSitterManager:
             "go": Language(tree_sitter_go.language()),
             "html": Language(tree_sitter_html.language()),
             "json": Language(tree_sitter_json.language()),
-            # "ts": Language(tree_sitter_typescript.language()), # fix no language() in ts library
-            # "tsx": Language(tree_sitter_typescript.language()), # fix no language() in ts library
+            # "typescript": Language(tree_sitter_typescript.language()), # fix no language() in ts library
             "toml": Language(tree_sitter_toml.language()),
             "yaml": Language(tree_sitter_yaml.language()),
-            "yml": Language(tree_sitter_yaml.language()),
             "dockerfile": Language(tree_sitter_dockerfile.language()),
-            "md": Language(tree_sitter_markdown.language()),
             "markdown": Language(tree_sitter_markdown.language()),
             "css": Language(tree_sitter_css.language()),
         }
@@ -52,12 +49,12 @@ class TreeSitterManager:
             ".html": "html",
             ".htm": "html",
             ".json": "json",
-            ".ts": "ts",
-            ".tsx": "tsx",
+            ".ts": "typescript",
+            ".tsx": "typescript",
             ".toml": "toml",
             ".yaml": "yaml",
-            ".yml": "yml",
-            ".md": "md",
+            ".yml": "yaml",
+            ".md": "markdown",
             ".markdown": "markdown",
             ".css": "css",
         }
@@ -102,6 +99,132 @@ class TreeSitterManager:
             parser = Parser(lang)
             self._parsers[key] = parser
         return parser
+
+    # ------------------ Go-specific extractor ------------------
+    def extract_go_entities(self, text: str, path: Path) -> Dict[str, Any]:
+        """
+        Parse Go source and return a dict with keys:
+          - 'package': package_name or None
+          - 'imports': list of import paths
+          - 'entities': list of dicts {kind, name, start, end, src}
+        """
+        parser = self.get_parser_for_path(path)
+        if not parser:
+            return {"package": None, "imports": [], "entities": []}
+
+        btext = text.encode("utf8")
+        try:
+            tree = parser.parse(btext)
+        except Exception:
+            return {"package": None, "imports": [], "entities": []}
+        root = tree.root_node
+
+        package_name = None
+        imports: List[str] = []
+        entities: List[Dict[str, Any]] = []
+
+        # helper to decode bytes slice
+        def decode_slice(s: int, e: int) -> str:
+            try:
+                return btext[s:e].decode("utf8", errors="replace")
+            except Exception:
+                return ""
+
+        # 1) extract package and imports (top-level)
+        for child in root.children:
+            # package_clause -> contains identifier node with package name
+            if child.type == "package_clause":
+                for gc in child.children:
+                    if gc.type == "package_identifier":
+                        package_name = decode_slice(gc.start_byte, gc.end_byte)
+                        break
+            # import_declaration -> collect import_spec(s)
+            elif child.type == "import_declaration":
+                for gc in child.children:
+                    if gc.type in ("import_spec_list", "import_spec"):
+                        for spec in gc.children:
+                            if spec.type == "import_spec":
+                                # import_spec may have string_literal or interpreted_string_literal
+                                for s_ch in spec.children:
+                                    if s_ch.type in ("interpreted_string_literal", "string_literal"):
+                                        # remove quotes
+                                        val = decode_slice(s_ch.start_byte, s_ch.end_byte)
+                                        val = val.strip('`"')
+                                        imports.append(val)
+                            elif spec.type in ("string_literal", "interpreted_string_literal"):
+                                val = decode_slice(spec.start_byte, spec.end_byte).strip('`"')
+                                imports.append(val)
+
+        # 2) traverse AST for entities (functions, methods, types)
+        dq = deque([root])
+        while dq:
+            n = dq.popleft()
+
+            # functions / methods
+            if n.type in ("function_declaration", "method_declaration"):
+                start, end = n.start_point.row + 1, n.end_point.row + 1
+                name = None
+                # find identifier for name
+                for c in n.children:
+                    if c.type in ("field_identifier", "identifier"):
+                        name = decode_slice(c.start_byte, c.end_byte)
+                        break
+
+                src = decode_slice(n.start_byte, n.end_byte)
+                entities.append({
+                    "kind": "method" if n.type == "method_declaration" else "function",
+                    "name": name,
+                    "start": start,
+                    "end": end,
+                    "src": src,
+                })
+
+            # type declarations (structs, interfaces, aliases)
+            elif n.type == "type_declaration":
+                # iterate children to find type_spec nodes
+                for ts in n.children:
+                    if ts.type == "type_spec":
+                        # type_spec children include 'type' and name identifier
+                        type_name = None
+                        type_kind = "type"
+                        for c in ts.children:
+                            if c.type in ("type_identifier", "type_name", "identifier"):
+                                # name of the type (varies by grammar)
+                                type_name = decode_slice(c.start_byte, c.end_byte)
+                                # continue searching for the actual type node
+                            if c.type in ("struct_type", "interface_type"):
+                                if c.type == "struct_type":
+                                    type_kind = "struct"
+                                elif c.type == "interface_type":
+                                    type_kind = "interface"
+                                # src for the whole type_spec:
+                                start, end = ts.start_point.row + 1, ts.end_point.row + 1
+                                src = decode_slice(ts.start_byte, ts.end_byte)
+                                entities.append({
+                                    "kind": type_kind,
+                                    "name": type_name,
+                                    "start": start,
+                                    "end": end,
+                                    "src": src,
+                                })
+                                break
+                        # if no struct/interface matched, still record the type_spec as generic
+                        else:
+                            start, end = ts.start_point.row + 1, ts.end_point.row + 1
+                            src = decode_slice(ts.start_byte, ts.end_byte)
+                            entities.append({
+                                "kind": "type",
+                                "name": type_name,
+                                "start": start,
+                                "end": end,
+                                "src": src,
+                            })
+
+            else:
+                # continue traversal
+                dq.extend(n.children)
+
+        return {"package": package_name, "imports": imports, "entities": entities}
 
     def extract_functions_or_blocks(self, text: str, path: Path) -> List[Tuple[int, int, Optional[str], str]]:
         """Return list of (start_byte, end_byte, name_or_None, source_text).

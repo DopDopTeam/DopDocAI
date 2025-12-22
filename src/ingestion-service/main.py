@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import hashlib
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -116,7 +116,6 @@ def chunk_text_by_tokens(text: str, max_tokens: int = 512, overlap: int = 64) ->
     return chunks
 
 
-
 # ---------------- main pipeline ----------------
 def process_repo_and_upsert_qdrant(root_path: str,
                                    ts_mgr: TreeSitterManager,
@@ -125,7 +124,6 @@ def process_repo_and_upsert_qdrant(root_path: str,
                                    overlap: int = 64):
     root = Path(root_path)
     repo_name = root.name
-    commit_hash = None # optional: fill using GitPython if you want
 
     for file_path in iterate_source_files(root):
         try:
@@ -137,31 +135,52 @@ def process_repo_and_upsert_qdrant(root_path: str,
 
         file_hash = file_sha1_text(text)
         rel_path = str(file_path.relative_to(root))
-        language = file_path.suffix.lstrip(".")
-        chunks_texts: List[Tuple[str, Optional[str], str]] = []
+        if file_path.name == "Dockerfile":
+            language = "Dockerfile"
+        else:
+            language = file_path.suffix.lstrip(".")
+        chunks_texts: List[Tuple] = []
 
-        # ask TreeSitterManager for function/block extraction
-        funcs = ts_mgr.extract_functions_or_blocks(text, file_path)
-        if funcs:
-            # funcs are (start_byte, end_byte, name_or_None, src)
-            for start, end, name, src in funcs:
-                if count_tokens(src) > max_tokens:
-                    small_chunks = chunk_text_by_tokens(src, max_tokens=max_tokens, overlap=overlap)
+        # ask TreeSitterManager for entities/block extraction
+        if language == "go":
+            file_data = ts_mgr.extract_go_entities(text, file_path)
+
+            package = file_data["package"] or "" # empty string if None
+            imports = "\n".join(file_data["imports"])
+            entities = file_data["entities"]
+
+            for entity in entities:
+                if count_tokens(entity["src"]) > max_tokens:
+                    small_chunks = chunk_text_by_tokens(entity["src"], max_tokens=max_tokens, overlap=overlap)
                     for s_tok, e_tok, ctext in small_chunks:
-                        chunks_texts.append((rel_path, name, ctext))
+                        chunks_texts.append((rel_path,
+                                             package,
+                                             imports,
+                                             entity["kind"],
+                                             entity["name"],
+                                             entity["start"],
+                                             entity["end"],
+                                             ctext))
                 else:
-                    chunks_texts.append((rel_path, name, src))
+                    chunks_texts.append((rel_path,
+                                         package,
+                                         imports,
+                                         entity["kind"],
+                                         entity["name"],
+                                         entity["start"],
+                                         entity["end"],
+                                         entity["src"]))
         else:
             # fallback to file-level chunking
             for s_tok, e_tok, ctext in chunk_text_by_tokens(text, max_tokens, overlap):
-                chunks_texts.append((rel_path, None, ctext))
+                chunks_texts.append((rel_path, "", "", "", "", "", "", ctext))
 
-        docs = [ct[2] for ct in chunks_texts]
-        if not docs:
+        sentences = [ct[7] for ct in chunks_texts]
+        if not sentences:
             continue
 
         embeddings = model.encode(
-            docs,
+            sentences,
             prompt_name="code2code_document",
             show_progress_bar=True,
             convert_to_numpy=True
@@ -171,22 +190,79 @@ def process_repo_and_upsert_qdrant(root_path: str,
         if embeddings.ndim == 1:
             embeddings = embeddings.reshape(1, -1)
 
-        for idx, (rel_path, fn_name, doc_text) in enumerate(chunks_texts):
-            metadata = {
-                "repo": repo_name,
-                "file_path": rel_path,
-                "commit": commit_hash,
-                "language": language,
-                "function": fn_name,
-                "chunk_index": idx,
-                "text": doc_text
-            }
+        for idx, (rel_path, package, imports, kind, name, start, end, src) in enumerate(chunks_texts):
+            if language == "go":
+                metadata = {
+                    "repo": repo_name,
+                    "file_path": rel_path,
+                    "language": language,
+                    "package": package,
+                    "imports": imports,
+                    "kind": kind,
+                    "name": name,
+                    "start_code_line": start,
+                    "end_code_line": end,
+                    "chunk_index": idx,
+                    "body": src
+                }
+            else:
+                metadata = {
+                    "repo": repo_name,
+                    "file_path": rel_path,
+                    "language": language,
+                    "chunk_index": idx,
+                    "body": src
+                }
             vector = embeddings[idx].astype(float).tolist()
             q_mgr.add_point_from_vector(file_hash=file_hash, chunk_index=idx, vector=vector, payload=metadata)
 
     # flush any remaining points after processing all files
     q_mgr.flush()
     return q_mgr.total_upserted
+
+
+def search_qdrant_by_query(model, qmgr, query_text: str, top_k: int = 10, prompt_name: str = "nl2code_query"):
+    """
+    model: SentenceTransformer instance
+    qmgr: your QdrantManager instance (must expose qmgr.client)
+    Returns list of dicts: {id, score, payload, vector, cosine}
+    """
+    # 1) get query embedding (numpy)
+    q_emb = model.encode([query_text], convert_to_numpy=True, show_progress_bar=False, prompt_name=prompt_name)[0]
+
+    # normalize (if you normalized when upserting)
+    q_emb = q_emb / np.maximum(np.linalg.norm(q_emb), 1e-12)
+
+    # 2) query Qdrant
+    # with_vector=True to get stored vector back (optional)
+    results = qmgr.client.search(
+        collection_name=qmgr.collection_name,
+        query_vector=q_emb.tolist(),
+        limit=top_k,
+        with_payload=True,
+    )
+
+    # 3) results -> friendly list
+    out = []
+    for hit in results:
+        # hit.id, hit.payload, hit.vector, hit.score (distance or similarity depending on setup)
+        stored_vec = np.array(hit.vector) if hasattr(hit, "vector") and hit.vector is not None else None
+
+        # compute cosine ourselves if stored_vec is available and normalized
+        cosine = None
+        if stored_vec is not None:
+            stored_vec = stored_vec / np.maximum(np.linalg.norm(stored_vec), 1e-12)
+            cosine = float(np.dot(q_emb, stored_vec))
+
+        out.append({
+            "id": hit.id,
+            "score": getattr(hit, "score", None),
+            "payload": hit.payload,
+            "vector": stored_vec,
+            "cosine": cosine,
+        })
+
+    return out
 
 
 if __name__ == "__main__":
