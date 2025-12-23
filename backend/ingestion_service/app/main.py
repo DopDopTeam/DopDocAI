@@ -8,9 +8,9 @@ from backend.ingestion_service.app.core.config import settings
 def create_app() -> FastAPI:
     app = FastAPI(title="ingestion_service")
 
-    @app.get("/")
-    async def root():
-        return {"message": "Hello World"}
+    @app.get("/health")
+    async def healthcheck():
+        return {"message": "healthy"}
 
     app.include_router(ingest_router)
     return app
