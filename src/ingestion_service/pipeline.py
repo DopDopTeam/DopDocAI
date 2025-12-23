@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import hashlib
 from typing import List, Tuple
@@ -8,8 +7,8 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
 import torch
 
-from treesitter import TreeSitterManager
-from qdrant import QdrantManager
+from src.ingestion_service.treesitter import TreeSitterManager
+from src.ingestion_service.qdrant import QdrantManager
 
 # ---------------- config / models ----------------
 JINA_MODEL = "jinaai/jina-code-embeddings-0.5b"
@@ -117,24 +116,25 @@ def chunk_text_by_tokens(text: str, max_tokens: int = 512, overlap: int = 64) ->
 
 
 # ---------------- main pipeline ----------------
-def process_repo_and_upsert_qdrant(root_path: str,
+def process_repo_and_upsert_qdrant(root_path: Path,
+                                   repo_name: str,
                                    ts_mgr: TreeSitterManager,
                                    q_mgr: QdrantManager,
+                                   vector_size: int = 896,
                                    max_tokens: int = 512,
                                    overlap: int = 64):
-    root = Path(root_path)
-    repo_name = root.name
+    q_mgr.init_collection(vector_size)
 
-    for file_path in iterate_source_files(root):
+    for file_path in iterate_source_files(root_path):
         try:
             text = file_path.read_text(encoding="utf-8", errors="ignore")
-            print(f"DEBUG: Processing {file_path.relative_to(root)}")
+            print(f"DEBUG: Processing {file_path.relative_to(root_path)}")
         except Exception as e:
             print(f"Skipping {file_path}: read error: {e}")
             continue
 
         file_hash = file_sha1_text(text)
-        rel_path = str(file_path.relative_to(root))
+        rel_path = str(file_path.relative_to(root_path))
         if file_path.name == "Dockerfile":
             language = "Dockerfile"
         else:
@@ -263,19 +263,3 @@ def search_qdrant_by_query(model, qmgr, query_text: str, top_k: int = 10, prompt
         })
 
     return out
-
-
-if __name__ == "__main__":
-    root = "LOCAL_PATH_TO_REPO"
-
-    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", None)  # if needed
-    COLLECTION_NAME = "repo_code"
-
-    qdrant_manager = QdrantManager(QDRANT_URL, QDRANT_API_KEY, COLLECTION_NAME)
-    ts_manager = TreeSitterManager()
-
-    qdrant_manager.init_collection(896) # default embedding vector dimension for jina-code-embeddings-0.5b
-
-    n = process_repo_and_upsert_qdrant(root, ts_manager, qdrant_manager, max_tokens=512, overlap=64)
-    print(f"Upserted {n} chunks into Qdrant collection '{COLLECTION_NAME}'.")
