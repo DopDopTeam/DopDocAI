@@ -5,19 +5,19 @@ from typing import List, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
-import torch
+from torch import cuda, bfloat16
 
-from src.ingestion_service.treesitter import TreeSitterManager
-from src.ingestion_service.qdrant import QdrantManager
+from backend.ingestion_service.treesitter import TreeSitterManager
+from backend.ingestion_service.qdrant import QdrantManager
 
 # ---------------- config / models ----------------
 JINA_MODEL = "jinaai/jina-code-embeddings-0.5b"
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda" if cuda.is_available() else "cpu"
 
 model = SentenceTransformer(
     JINA_MODEL,
     device=device,
-    model_kwargs={"dtype": torch.bfloat16},
+    model_kwargs={"dtype": bfloat16},
     tokenizer_kwargs={"padding_side": "left"},
 )
 

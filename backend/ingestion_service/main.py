@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 
-from backend.app.api.endpoints import register_endpoints
+from backend.ingestion_service.routes import register_endpoints
 
 app = FastAPI()
 

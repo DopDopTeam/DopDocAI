@@ -4,12 +4,12 @@ import shutil
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from backend.app.api.models.ingest_repository import RepoIngestResponse, RepoIngestRequest
-from backend.app.utils.clone_remote_repo import clone_remote_repo
-from backend.app.utils.url_converter import repo_url_to_slug, get_repo_name
-from src.ingestion_service.pipeline import process_repo_and_upsert_qdrant
-from src.ingestion_service.qdrant import QdrantManager
-from src.ingestion_service.treesitter import TreeSitterManager
+from backend.ingestion_service.models.repo_ingest_request_response import RepoIngestResponse, RepoIngestRequest
+from backend.ingestion_service.pipeline import process_repo_and_upsert_qdrant
+from backend.ingestion_service.qdrant import QdrantManager
+from backend.ingestion_service.treesitter import TreeSitterManager
+from backend.ingestion_service.utils.clone_remote_repo import clone_remote_repo
+from backend.ingestion_service.utils.url_converter import get_repo_name, repo_url_to_slug
 
 
 def register_endpoints(app: FastAPI):
