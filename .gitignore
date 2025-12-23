@@ -61,3 +61,28 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# === Go binaries ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# === Go build artifacts ===
+*.test
+*.out
+bin/
+dist/
+
+# === Go workspace ===
+go.work
+go.work.sum
+
+# === Go cache ===
+.gomodcache/
+.gocache/
+
+# === Coverage ===
+coverage.out
+coverage.html
