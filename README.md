@@ -1,47 +1,63 @@
-# Project Spec: GitHub Repository RAG (MVP)
+# Project Specification
 
-## 1. Project Overview
-
-This project is a **Retrieval-Augmented Generation (RAG) system for public GitHub repositories**.
-
-The system allows a user to:
-
-1. Provide a **public GitHub repository URL**
-2. Trigger **one-time indexing on demand**
-3. Ask questions about the repository via a **chat interface**
-4. Receive answers **strictly grounded in the repository content**, with **explicit sources (file + line ranges)**
-
-The project is designed as a **1-week MVP**, prioritizing correctness, simplicity, and debuggability over completeness.
+## GitHub Repository RAG Platform (Microservices + Microfrontends)
 
 ---
 
-## 2. Scope and Explicit Non-Goals
+## 1. Project Overview
+
+This project is a **web-based Retrieval-Augmented Generation (RAG) platform** for analyzing **public GitHub repositories**.
+
+The system allows users to:
+
+1. Authenticate via JWT
+2. Submit a **public GitHub repository URL**
+3. Trigger **on-demand, one-time indexing**
+4. Ask questions about the repository through a chat interface
+5. Receive answers **strictly grounded in the repository content**, with **explicit sources (file + line ranges)**
+
+The platform is built using:
+
+* **Microservices (FastAPI)**
+* **Microfrontends (React)**
+* **Vector search (Qdrant)**
+* **Relational storage (PostgreSQL)**
+* **Cloud-native infrastructure (Kubernetes + Helm)**
+
+This specification prioritizes:
+
+* determinism over creativity,
+* traceability over “smartness”,
+* production-ready architecture over demo hacks.
+
+---
+
+## 2. Scope and Non-Goals
 
 ### In Scope
 
 * Public GitHub repositories only
-* One-time indexing per repository (no auto-sync)
-* Go source code (`.go`) + `README.md`
+* One-time indexing triggered manually
+* Go source code (`.go`) and `README.md`
 * Hybrid RAG:
 
-  * **Structured chunks for Go code**
-  * **Text chunks for README**
-* Web UI with two-panel layout:
+  * structured chunks for Go code
+  * text chunks for README
+* JWT-based authentication
+* HTTPS-only communication
+* Microfrontend architecture
+* Observability (metrics + logs)
+* Kubernetes deployment
 
-  * Left: repositories & indexing
-  * Right: chat
-* Answers must include **sources**
-* Answers must be **strictly based on retrieved context**
+### Explicit Non-Goals
 
-### Explicitly Out of Scope
-
-* Private repositories / authentication
-* PRs, Issues, Wiki, Discussions
-* Tool usage (no function calls, no file opening tools)
-* Multi-user auth / permissions
-* Advanced ranking (cross-encoders, AST graphs, call graphs)
-* Streaming responses
-* Real-time indexing progress bars
+* Private repositories
+* GitHub Issues / PRs / Wiki / Discussions
+* Tool-usage by LLM (no file-open, no search tools)
+* Real-time collaboration
+* Advanced semantic reranking (cross-encoders)
+* Call-graph or control-flow analysis
+* Automatic reindexing on repo updates
 
 ---
 
@@ -49,286 +65,321 @@ The project is designed as a **1-week MVP**, prioritizing correctness, simplicit
 
 ### Frontend
 
-* **React + Vite**
-* Two-panel layout:
-
-  * Left: repository management
-  * Right: chat interface
-* Communicates with backend via REST API
+* **Microfrontends**
+* React 18
+* React Router (routing)
+* MobX (state management)
+* Material UI (UI components)
+* Axios (HTTP client)
 
 ### Backend
 
-* **FastAPI**
-* Responsibilities:
+* **Microservices**
+* Core framework: **FastAPI (Python)**
+* Services communicate via REST
+* JWT authentication
+* Stateless services
 
-  * Repository cloning
-  * Indexing (parsing, chunking, embedding)
-  * Retrieval
-  * Chat orchestration
-* No tool usage inside LLM calls
+### Data & Storage
 
-### Storage
+* **PostgreSQL** — metadata, users, chats
+* **Qdrant** — vector embeddings
+* No embedding data stored in Postgres
 
-* **Qdrant** — vector storage for chunks
-* **PostgreSQL** — metadata & chat history
+### Infrastructure
+
+* Kubernetes
+* Helm
+* GitHub Actions (CI/CD)
+* Prometheus + Grafana (metrics)
+* Loki (logs)
 
 ---
 
-## 4. Data Model
+## 4. Frontend Architecture (Microfrontends)
 
-### 4.1 PostgreSQL Schema (MVP)
+### Structure
 
-#### `repos`
+* **Host / Shell application**
 
-* `id` (UUID, PK)
-* `url` (TEXT)
+  * Top-level routing
+  * Auth guard
+  * Global MUI theme
+  * Shared state (selected repo/chat)
+* **mf-repos**
+
+  * Repository indexing UI
+  * Repository list + status
+* **mf-chat**
+
+  * Chat interface
+  * Messages and sources
+
+Microfrontends must be:
+
+* independently buildable
+* independently deployable
+* integrated via module federation (or equivalent)
+
+### Routing
+
+* `/login` — authentication
+* `/app` — protected application
+
+  * Two-panel layout:
+
+    * Left: repositories
+    * Right: chat
+
+---
+
+## 5. Authentication & Security
+
+### Authentication
+
+* JWT-based authentication
+* Access token stored in localStorage (MVP assumption)
+* Axios interceptor injects:
+
+  ```
+  Authorization: Bearer <token>
+  ```
+
+### Authorization Behavior
+
+* If token missing or invalid → redirect to `/login`
+* On HTTP 401:
+
+  * clear token
+  * force logout
+
+### Transport Security
+
+* HTTPS enforced at ingress / load balancer
+* Frontend assumes HTTPS API endpoint via environment variables
+
+---
+
+## 6. Backend Microservices (Logical View)
+
+### Core Services
+
+1. **Auth Service**
+
+   * Login
+   * JWT issuance
+
+2. **Repository Service**
+
+   * Register repository
+   * Track indexing status
+   * Store repo metadata
+
+3. **Indexing / RAG Service**
+
+   * Clone repository
+   * Parse Go + README
+   * Chunk content
+   * Generate embeddings
+   * Store vectors in Qdrant
+
+4. **Chat Service**
+
+   * Manage chats
+   * Store messages
+   * Perform retrieval
+   * Call LLM
+
+Services communicate via REST and share JWT-based auth.
+
+---
+
+## 7. Data Model (PostgreSQL)
+
+### users
+
+* `id` (UUID)
+* `username`
+* `password_hash`
+* `created_at`
+
+### repos
+
+* `id` (UUID)
+* `url`
 * `status` (`new | indexing | ready | error`)
-* `last_commit_sha` (TEXT, nullable)
-* `last_error` (TEXT, nullable)
+* `last_commit_sha`
+* `last_error`
 * `created_at`
 * `updated_at`
 
-#### `chats`
+### chats
 
-* `id` (UUID, PK)
-* `repo_id` (FK → repos.id)
+* `id` (UUID)
+* `repo_id`
+* `user_id`
 * `created_at`
 
-#### `messages`
+### messages
 
-* `id` (UUID, PK)
-* `chat_id` (FK → chats.id)
-* `role` (`user | assistant | system`)
-* `content` (TEXT)
+* `id` (UUID)
+* `chat_id`
+* `role` (`user | assistant`)
+* `content`
 * `created_at`
 
 ---
 
-## 5. Vector Store Design (Qdrant)
+## 8. Vector Storage (Qdrant)
 
-Single collection, multiple document kinds.
+Single collection, multiple document types.
 
-### Common Payload Fields
+### Common Payload
 
-* `repo_id` (UUID)
-* `commit_sha` (string)
-* `kind` (`go_symbol` | `readme_chunk`)
-* `path` (string)
-* `text` (string)
-* `start_line` (int)
-* `end_line` (int)
+* `repo_id`
+* `commit_sha`
+* `kind`
+* `path`
+* `text`
+* `start_line`
+* `end_line`
 
-### 5.1 Go Code Chunks (`kind = "go_symbol"`)
+### Go Code Chunks (`kind = "go_symbol"`)
 
-Chunk unit: **function or method** (optionally types later).
+* `symbol_type` (`func | method | type`)
+* `symbol_name`
+* `package`
+* `signature`
 
-Additional payload:
+Chunk unit: **function or method**
+Text includes comments + signature + body.
 
-* `symbol_type`: `func | method | type`
-* `symbol_name`: string
-* `package`: string
-* `signature`: string
+### README Chunks (`kind = "readme_chunk"`)
 
-Text content:
-
-* Leading comments (if any)
-* Function/method signature
-* Full body (may be truncated if extremely large)
-
-### 5.2 README Chunks (`kind = "readme_chunk"`)
-
-* Chunked by Markdown headers
-* Size limit: ~1500–2500 characters with overlap
-* Retains line number mapping
+* Chunked by markdown headers
+* Size-limited with overlap
 
 ---
 
-## 6. Indexing Pipeline
+## 9. Indexing Pipeline
 
-### Step 1: Clone Repository
+1. Clone public GitHub repository (`--depth 1`)
+2. Resolve HEAD commit SHA
+3. Filter files:
 
-* `git clone --depth 1 <repo_url>`
-* Resolve HEAD commit SHA
+   * include `.go`, `README.md`
+   * exclude vendor, binaries, generated files
+4. Chunk content:
 
-### Step 2: File Filtering
+   * structured Go symbols
+   * markdown sections
+5. Generate embeddings
+6. Upsert into Qdrant
+7. Update repository status
 
-Include:
-
-* `**/*.go`
-* `README.md`
-
-Exclude:
-
-* `.git/`
-* `vendor/`
-* `node_modules/`
-* `dist/`, `bin/`
-* Binary files
-
-### Step 3: Chunking
-
-#### Go Code
-
-* Use `tree-sitter-go` or Go parser
-* Extract:
-
-  * Functions
-  * Methods
-* Preserve line ranges
-
-#### README
-
-* Chunk by headers
-* Enforce max chunk size
-
-### Step 4: Embeddings
-
-* Generate embeddings for each chunk
-* Batch upsert into Qdrant with payload
-
-### Step 5: Finalize
-
-* Update repo status to `ready`
-* Save commit SHA
+Indexing is **on-demand only**.
 
 ---
 
-## 7. Retrieval Strategy (Hybrid, Simple)
+## 10. Retrieval Strategy (Hybrid)
 
-No BM25, no rerankers.
+No BM25, no tool-usage.
 
-### Query Classification (Lightweight Heuristics)
+### Steps
 
-* If query mentions:
+1. Classify query intent (light heuristics)
+2. Perform vector search:
 
-  * `run`, `deploy`, `docker`, `install` → bias README
-  * `where`, `implemented`, `function`, `method` → bias Go symbols
-* Default: balanced
-
-### Retrieval Flow
-
-1. Vector search:
-
-   * `go_symbol` chunks (top K1)
-   * `readme_chunk` chunks (top K2)
-2. Merge results
-3. Remove duplicates
-4. Enforce max total context size
+   * Go symbols
+   * README chunks
+3. Merge and deduplicate results
+4. Enforce context size limit
 
 ---
 
-## 8. LLM Answering Policy (Critical)
+## 11. LLM Answering Policy (Critical)
 
-### Core Rules
+### Rules
 
-* **Use ONLY the provided context**
-* **Do NOT infer or guess**
-* **If information is missing, explicitly say so**
-* **Always include sources**
+* Use **only retrieved context**
+* Do not infer missing information
+* If context insufficient → say so explicitly
+* Always include sources
 
-### Source Format
-
-Each answer must include a `Sources` section:
+### Output Format
 
 ```
+<answer text>
+
 Sources:
-- internal/server/http.go:45–88
-- README.md:12–34
+- path/to/file.go:10–45
+- README.md:12–30
 ```
 
-### Failure Mode
-
-If no sufficiently relevant context is found:
-
-> “I could not find this information in the repository based on the indexed files.”
+Silence is preferred over hallucination.
 
 ---
 
-## 9. API Endpoints
+## 12. Frontend UX Requirements
 
-### Repositories
-
-* `POST /repos`
-
-  * `{ url: string }`
-* `GET /repos`
-* `GET /repos/{repo_id}`
-
-### Indexing Status
-
-* `GET /repos/{repo_id}/status`
-
-### Chat
-
-* `POST /chats`
-
-  * `{ repo_id }`
-* `GET /chats/{chat_id}/messages`
-* `POST /chats/{chat_id}/messages`
-
-  * `{ content: string }`
-  * Returns:
-
-    * `answer`
-    * `sources[]`
-
----
-
-## 10. Frontend UX Requirements
-
-### Layout
-
-* Two-panel UI:
-
-  * Left: repository list + index form
-  * Right: chat
-
-### Chat Behavior
-
-* Message history per repository
-* Textarea input
-* Messages rendered sequentially
-* Assistant messages include expandable **Sources**
-
-### UX Principles
-
-* No empty ambiguity
+* Two-panel layout
+* Repository indexing + status visibility
+* Chat disabled while indexing
+* Optimistic UI for user messages
+* Assistant placeholder (“Думаю…”)
+* Sources shown for every assistant response
 * Clear error states
-* Visible indexing status
-* Trust through transparency (sources always shown)
 
 ---
 
-## 11. Development Constraints
+## 13. Observability
 
-* Target timeline: **7 days**
-* Prioritize:
+### Metrics
 
-  * Correctness
-  * Deterministic behavior
-  * Debuggability
-* Avoid:
+* Request latency
+* Indexing duration
+* Vector search latency
+* LLM request count
 
-  * Over-engineering
-  * Premature optimizations
-  * Feature creep
+Collected via **Prometheus**, visualized in **Grafana**.
 
----
+### Logging
 
-## 12. Guiding Principle
-
-> This system is not a “smart assistant”.
->
-> It is a **grounded interface over a codebase**.
->
-> Silence and “I don’t know” are better than confident hallucination.
+* Structured logs
+* Centralized via **Loki**
+* Correlation IDs across services
 
 ---
 
-Если хочешь, следующим шагом я могу:
+## 14. CI/CD
 
-* превратить этот документ в **System Prompt** для LLM (короче, но жёстче),
-* или разбить его на **Backend Spec / Frontend Spec / Prompt Spec**,
-* или сразу сгенерировать **скелет репозитория** (backend + frontend + compose).
+### GitHub Actions
 
-Ты сейчас в очень хорошей позиции: с таким контекстом LLM реально начинает *помогать*, а не фантазировать.
+* Linting
+* Tests
+* Docker image build
+* Push to registry
+
+### Deployment
+
+* Kubernetes
+* Helm charts per service
+* Values per environment
+
+---
+
+## 15. Guiding Principles
+
+> This system is a **grounded analytical interface**, not a creative assistant.
+
+> If the answer cannot be proven by the repository — the correct answer is “I don’t know”.
+
+---
+
+## 16. Intended Usage of This Document
+
+This document is designed to be:
+
+* passed verbatim to an LLM as **project context**
+* used as a **single source of truth**
+* referenced during frontend, backend, infra, and CI development
