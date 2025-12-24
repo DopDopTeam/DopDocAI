@@ -4,6 +4,8 @@ from pydantic import AnyUrl
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="INGEST_", extra="ignore")
 
+    database_url: str = "postgresql+psycopg://ingest:ingest@localhost:5432/ingest"
+
     qdrant_url: AnyUrl = "http://localhost:6333"
     qdrant_api_key: str | None = None
 

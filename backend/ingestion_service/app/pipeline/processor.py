@@ -1,7 +1,7 @@
 from hashlib import sha1
 from pathlib import Path
-from backend.ingestion_service.app.core.config import settings
-from backend.ingestion_service.app.pipeline.traversal import iterate_source_files
+from app.core.config import settings
+from app.pipeline.traversal import iterate_source_files
 
 
 def process_repo_and_upsert(root_path: Path, repo_name: str, treesitter, embedder, qdrant):

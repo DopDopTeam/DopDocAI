@@ -8,7 +8,7 @@ from tree_sitter import Language, Parser
 import tree_sitter_go
 import tree_sitter_html
 import tree_sitter_json
-import tree_sitter_typescript
+# import tree_sitter_typescript
 import tree_sitter_toml
 import tree_sitter_yaml
 

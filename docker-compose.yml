@@ -1,12 +1,63 @@
-version: "3.8"
+version: "3.9"
+
 services:
+  postgres:
+    image: postgres:16
+    container_name: ingestion_postgres
+    environment:
+      POSTGRES_DB: ingest
+      POSTGRES_USER: ingest
+      POSTGRES_PASSWORD: ingest
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingest -d ingest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   qdrant:
     image: qdrant/qdrant:latest
-    restart: unless-stopped
+    container_name: ingestion_qdrant
     ports:
       - "6333:6333"  # REST API
       - "6334:6334"  # optional UI/metrics
     volumes:
-      - ./qdrant_storage:/qdrant/utils
+      - qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__STORAGE_TYPE=rocksdb
+
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: backend/ingestion_service/Dockerfile.dev
+    container_name: ingestion_service
+    environment:
+      # Settings (env_prefix=INGEST_)
+      INGEST_DATABASE_URL: postgresql+psycopg://ingest:ingest@postgres:5432/ingest
+      INGEST_QDRANT_URL: http://qdrant:6333
+      INGEST_QDRANT_API_KEY: ""
+      INGEST_HOST: 0.0.0.0
+      INGEST_PORT: 8000
+      # ML params
+      INGEST_JINA_MODEL: jinaai/jina-code-embeddings-0.5b
+      INGEST_MAX_TOKENS: "512"
+      INGEST_OVERLAP: "64"
+      INGEST_VECTOR_SIZE: "896"
+      INGEST_QDRANT_BATCH_SIZE: "64"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/ingestion_service:/app/backend/ingestion_service
+    depends_on:
+      - postgres
+      - qdrant
+    # для автопрогона миграций:
+    # command: ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+
+volumes:
+  pg_data:
+  qdrant_data:
