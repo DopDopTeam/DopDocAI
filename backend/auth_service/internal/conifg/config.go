@@ -1,0 +1,112 @@
+package conifg
+
+import (
+	"errors"
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
+)
+
+type Config struct {
+	Env string
+
+	HTTP struct {
+		Addr string
+	}
+
+	DB struct {
+		DSN string
+	}
+
+	JWT struct {
+		AccessTTL  time.Duration
+		RefreshTTL time.Duration
+		Secret     []byte
+		Pepper     []byte
+	}
+
+	Logger LoggerConfig
+}
+
+type LoggerConfig struct {
+	Format string // "json" | "text"
+	Level  string // "debug" | "info" | "warn" | "error"
+}
+
+func Read() (Config, error) {
+	var cfg Config
+
+	_ = godotenv.Load()
+
+	cfg.Env = getenv("ENV", "dev")
+	cfg.HTTP.Addr = getenv("HTTP_ADDR", ":8080")
+	cfg.DB.DSN = getenv("DB_DSN", "postgres://postgres:example@localhost:5432/doc_test")
+
+	accessMin, err := atoi(getenv("JWT_ACCESS_TTL_MIN", "15"))
+	if err != nil {
+		return cfg, err
+	}
+	refreshDays, err := atoi(getenv("JWT_REFRESH_TTL_DAYS", "14"))
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.JWT.AccessTTL = time.Duration(accessMin) * time.Minute
+	cfg.JWT.RefreshTTL = time.Duration(refreshDays) * 24 * time.Hour
+	cfg.JWT.Secret = []byte(mustGetenv("JWT_SECRET"))
+	cfg.JWT.Pepper = []byte(mustGetenv("REFRESH_PEPPER"))
+
+	if cfg.JWT.AccessTTL <= 0 || cfg.JWT.RefreshTTL <= 0 {
+		return cfg, errors.New("invalid TTL values")
+	}
+
+	cfg.Logger.Format = getenv("LOG_FROMAT", "text")
+	cfg.Logger.Level = getenv("LOG_LEVEL", "debug")
+	initLogger(cfg.Logger)
+
+	return cfg, nil
+}
+
+func getenv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
+}
+
+func mustGetenv(k string) string {
+	v := os.Getenv(k)
+	if v == "" {
+		panic("missing env: " + k)
+	}
+	return v
+}
+
+func atoi(s string) (int, error) { return strconv.Atoi(s) }
+
+func initLogger(cfg LoggerConfig) {
+	switch cfg.Format {
+	case "json":
+		log.SetFormatter(&log.JSONFormatter{})
+	default:
+		log.SetFormatter(&log.TextFormatter{
+			FullTimestamp: true,
+		})
+	}
+
+	switch cfg.Level {
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		log.SetLevel(log.InfoLevel)
+	}
+}
