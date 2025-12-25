@@ -1,6 +1,7 @@
 from functools import lru_cache
 from app.core.config import settings
 from app.infra.qdrant_client import QdrantManager
+from app.infra.repos_client import ReposServiceClient
 from app.infra.treesitter_client import TreeSitterManager
 from app.pipeline.embedder import Embedder
 from app.services.ingest_service import IngestService
@@ -29,9 +30,11 @@ def get_git_client() -> GitClient:
     return GitClient()
 
 def get_ingest_service() -> IngestService:
+    repos_client = ReposServiceClient(base_url=settings.repos_service_url)
     return IngestService(
         git=get_git_client(),
         treesitter=get_treesitter(),
         embedder=get_embedder(),
         qdrant_factory=get_qdrant,
+        repos_client=repos_client,
     )

@@ -10,5 +10,5 @@ class RepoIngestResponse(BaseModel):
     repo: str
     vectors_upserted: int
     repository_id: int
-    user_repository_id: int
+    repo_index_state_id: int
     status: str

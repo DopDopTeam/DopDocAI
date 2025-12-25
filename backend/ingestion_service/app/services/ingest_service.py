@@ -1,49 +1,52 @@
-from sqlalchemy.orm import Session
 from shutil import rmtree
 from datetime import datetime, timezone
 
-from app.domain.models import RepoIngestRequest, RepoIngestResponse
-from app.infra.repositories import UsersRepo, RepositoriesRepo, UserRepositoriesRepo
+from app.api.models import RepoIngestRequest, RepoIngestResponse
 from app.pipeline.processor import process_repo_and_upsert
 from app.utils.url_converter import repo_url_to_slug, get_repo_name
+from app.infra.repos_client import ReposServiceClient
 
 
 class IngestService:
-    def __init__(self, git, treesitter, embedder, qdrant_factory):
+    def __init__(self, git, treesitter, embedder, qdrant_factory, repos_client : ReposServiceClient):
         self.git = git
         self.treesitter = treesitter
         self.embedder = embedder
         self.qdrant_factory = qdrant_factory
+        self.repos = repos_client
 
-        self.users_repo = UsersRepo()
-        self.repos_repo = RepositoriesRepo()
-        self.user_repos_repo = UserRepositoriesRepo()
-
-    def ingest_repo(self, db: Session, req: RepoIngestRequest) -> RepoIngestResponse:
+    def ingest_repo(self, req: RepoIngestRequest) -> RepoIngestResponse:
         repo_url = str(req.repo_url)
         slug = repo_url_to_slug(repo_url)
         repo_name = get_repo_name(repo_url)
         collection = slug
 
-        # 1) validate user exists
-        user = self.users_repo.get_by_id(db, req.user_id)
-        if not user:
-            raise ValueError(f"User {req.user_id} not found")
+        # 1) upsert repository в repos_service
+        repo = self.repos.upsert_repository(
+            url=repo_url,
+            slug=slug,
+            default_branch=req.branch,
+        )
+        repository_id = repo["id"]
 
-        # 2) create repo + link
-        repo = self.repos_repo.get_or_create(db, url=repo_url, slug=slug, default_branch=req.branch)
-        user_repo = self.user_repos_repo.get_or_create(
-            db,
-            user_id=user.id,
-            repository_id=repo.id,
+        # 2) create repo_index_state (без проверки пользователя в БД!)
+        # repos_service может (опционально) валидировать user_id через auth_service,
+        # но по твоему ТЗ он хранит user_id как число без FK.
+        state = self.repos.create_index_state(
+            user_id=req.user_id,
+            repository_id=repository_id,
             branch=req.branch,
             qdrant_collection=collection,
         )
+        state_id = state["id"]
 
         # 3) mark processing
-        user_repo.status = "processing"
-        user_repo.last_error = None
-        db.commit()
+        self.repos.patch_index_state(state_id, {
+            "status": "processing",
+            "last_error": None,
+            "vectors_upserted": 0,
+            "indexed_at": None,
+        })
 
         repo_path = None
         try:
@@ -58,25 +61,30 @@ class IngestService:
                 qdrant=qdrant,
             )
 
-            # 4) update DB success
-            user_repo.status = "done"
-            user_repo.vectors_upserted = total
-            user_repo.indexed_at = datetime.now(timezone.utc)
-            repo.last_indexed_at = datetime.now(timezone.utc)
-            db.commit()
+            # 4) update state success
+            self.repos.patch_index_state(state_id, {
+                "status": "done",
+                "vectors_upserted": total,
+                "last_error": None,
+                "indexed_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+            # 5) обновим репу (last_indexed_at)
+            self.repos.touch_repository_indexed(repository_id)
 
             return RepoIngestResponse(
                 repo=repo_url,
                 vectors_upserted=total,
-                repository_id=repo.id,
-                user_repository_id=user_repo.id,
-                status=str(user_repo.status),
+                repository_id=repository_id,
+                repo_index_state_id=state_id,
+                status="done",
             )
 
         except Exception as e:
-            user_repo.status = "failed"
-            user_repo.last_error = str(e)
-            db.commit()
+            self.repos.patch_index_state(state_id, {
+                "status": "failed",
+                "last_error": str(e),
+            })
             raise
         finally:
             if repo_path and repo_path.exists():
