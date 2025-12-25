@@ -1,10 +1,10 @@
 from functools import lru_cache
-from backend.ingestion_service.app.core.config import settings
-from backend.ingestion_service.app.infra.qdrant_client import QdrantManager
-from backend.ingestion_service.app.infra.treesitter_client import TreeSitterManager
-from backend.ingestion_service.app.pipeline.embedder import Embedder
-from backend.ingestion_service.app.services.ingest_service import IngestService
-from backend.ingestion_service.app.infra.git_client import GitClient
+from app.core.config import settings
+from app.infra.qdrant_client import QdrantManager
+from app.infra.treesitter_client import TreeSitterManager
+from app.pipeline.embedder import Embedder
+from app.services.ingest_service import IngestService
+from app.infra.git_client import GitClient
 
 
 @lru_cache

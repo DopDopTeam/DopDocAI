@@ -1,8 +1,8 @@
 import uvicorn
 from fastapi import FastAPI
 
-from backend.ingestion_service.app.api.routes.ingest import router as ingest_router
-from backend.ingestion_service.app.core.config import settings
+from app.api.routes.ingest import router as ingest_router
+from app.core.config import settings
 
 
 def create_app() -> FastAPI:
