@@ -5,12 +5,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func setupRoutes(r *gin.Engine, authHandler *handlers.AuthHandler) {
+func setupRoutes(r *gin.Engine, authH *handlers.AuthHandler, healthH *handlers.HealthHandler) {
 
 	public := r.Group("/")
 	{
 		public.GET("/health", handlers.HealthCheck)
-		// public.POST("/login", authHandler.Login)
+		public.GET("/ready", healthH.IsAppReady)
+		public.GET("/version", healthH.Version)
+		public.POST("/login", authH.Login)
 		// public.POST("/refresh", authHandler.Refresh)
 		// public.POST("/logout", authHandler.Logout)
 	}

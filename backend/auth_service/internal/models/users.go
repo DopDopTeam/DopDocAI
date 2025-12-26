@@ -21,6 +21,14 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
+type LoginResult struct {
+	UserID       int64
+	Username     string
+	AccessToken  string
+	RefreshToken string
+	AccessTTL    time.Duration
+}
+
 // type RefreshRequest struct {
 // 	RefreshToken string `json:"refresh_token" binding:"required"`
 // }

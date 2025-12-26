@@ -2,11 +2,10 @@ package services
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"time"
 
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -19,86 +18,79 @@ type UserRepository interface {
 }
 
 type AuthService struct {
-	users     UserRepository
-	jwtSecret []byte
+	users UserRepository
+	jwt   models.JWT
 }
 
-func NewAuthService(users UserRepository, jwtSecret []byte) *AuthService {
-	return &AuthService{users: users}
-}
-
-func (s *AuthService) Login(c *gin.Context) {
-	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
-		return
+func NewAuthService(users UserRepository, jwt models.JWT) *AuthService {
+	return &AuthService{
+		users: users,
+		jwt:   jwt,
 	}
+}
 
+func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*models.LoginResult, error) {
 	log.WithField("username", req.Username).
 		Debug("Attempting to fetch user")
-	user, err := s.users.GetByUsername(c.Request.Context(), req.Username)
+	user, err := s.users.GetByUsername(ctx, req.Username)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"username": req.Username,
 			"error":    err,
 		}).Error("Failed to get user from repository")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
-		return
+		return nil, err
 	}
 
 	if user == nil {
 		log.WithField("username", req.Username).
 			Warn("User not found")
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "input error"})
-		return
+		return nil, errors.New("User not found")
 	}
 
 	log.WithField("userID", user.ID).
 		Debug("Checking user password")
 
-	auth, err := s.users.CheckPassword(c.Request.Context(), user.ID, req.Password)
+	auth, err := s.users.CheckPassword(ctx, user.ID, req.Password)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"userID": user.ID,
 			"error":  err,
 		}).Error("Error while checking password")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check user creds"})
-		return
+		return nil, err
 	}
 
 	if !auth {
 		log.WithField("userID", user.ID).
 			Warn("Password mismatch")
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "authorization failed"})
-		return
+		return nil, errors.New("Password mismatch")
 	}
 
 	log.WithFields(log.Fields{
 		"username": req.Username,
 	}).Debug("Generating tokens")
 
-	accessToken, err := generateToken(req.Username, "access", 5*time.Minute, s.jwtSecret)
+	accessToken, err := generateToken(req.Username, "access", s.jwt.AccessTTL, s.jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate access token")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create access token"})
-		return
+		return nil, err
 	}
 
-	// refreshToken, err := generateToken(req.Username, role, "refresh", 7*24*time.Hour, config.JwtSecret)
-	// if err != nil {
-	// 	log.WithError(err).
-	// 		Error("Failed to generate refresh token")
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create refresh token"})
-	// 	return
-	// }
+	refreshToken, err := generateToken(req.Username, "refresh", s.jwt.RefreshTTL, s.jwt.Secret)
+	if err != nil {
+		log.WithError(err).
+			Error("Failed to generate refresh token")
+		return nil, err
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"user":               user,
-		"access_token":       accessToken,
-		"token_type":         "bearer",
-		"refresh_expires_in": 1800, // seconds (30 mins)
-	})
+	return &models.LoginResult{
+		UserID:       user.ID,
+		Username:     user.Username,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		AccessTTL:    s.jwt.AccessTTL,
+	}, nil
+
 }
 
 func generateToken(username string, tokenType string, ttl time.Duration, secret []byte) (string, error) {

@@ -1,4 +1,4 @@
-package conifg
+package config
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
@@ -21,12 +22,7 @@ type Config struct {
 		DSN string
 	}
 
-	JWT struct {
-		AccessTTL  time.Duration
-		RefreshTTL time.Duration
-		Secret     []byte
-		Pepper     []byte
-	}
+	JWT models.JWT
 
 	Logger LoggerConfig
 }
@@ -63,7 +59,7 @@ func Read() (Config, error) {
 		return cfg, errors.New("invalid TTL values")
 	}
 
-	cfg.Logger.Format = getenv("LOG_FROMAT", "text")
+	cfg.Logger.Format = getenv("LOG_FORMAT", "text")
 	cfg.Logger.Level = getenv("LOG_LEVEL", "debug")
 	initLogger(cfg.Logger)
 
