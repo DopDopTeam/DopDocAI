@@ -1,10 +1,9 @@
 [tool.poetry]
-name = "ingestion-service"
+name = "ingestion_service"
 version = "0.1.0"
-description = "Repo ingestion microservice (FastAPI + Qdrant + Postgres)"
-authors = ["ExyKK <you@example.com>"]
-readme = "README.md"
-packages = [{ include = "app" }]
+description = "Repo ingestion microservice (FastAPI + Qdrant)"
+authors = ["DopDocAI Team <dev@local>"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"
@@ -14,10 +13,6 @@ uvicorn = { version = "^0.30.0", extras = ["standard"] }
 
 pydantic = "^2.8.0"
 pydantic-settings = "^2.4.0"
-
-sqlalchemy = "^2.0.32"
-alembic = "^1.13.2"
-psycopg = { version = "^3.2.1", extras = ["binary"] }
 
 gitpython = "^3.1.43"
 qdrant-client = "^1.11.0"

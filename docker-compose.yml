@@ -3,24 +3,24 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16
-    container_name: ingestion_postgres
+    container_name: dopdoc_postgres
     environment:
-      POSTGRES_DB: ingest
-      POSTGRES_USER: ingest
-      POSTGRES_PASSWORD: ingest
+      POSTGRES_DB: dopdoc
+      POSTGRES_USER: dopdoc
+      POSTGRES_PASSWORD: dopdoc
     ports:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ingest -d ingest"]
+      test: ["CMD-SHELL", "pg_isready -U dopdoc -d dopdoc"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: ingestion_qdrant
+    container_name: dopdoc_qdrant
     ports:
       - "6333:6333"  # REST API
       - "6334:6334"  # optional UI/metrics
@@ -33,10 +33,9 @@ services:
     build:
       context: .
       dockerfile: backend/ingestion_service/Dockerfile.dev
-    container_name: ingestion_service
+    container_name: dopdoc_ingestion_service
     environment:
-      # Settings (env_prefix=INGEST_)
-      INGEST_DATABASE_URL: postgresql+psycopg://ingest:ingest@postgres:5432/ingest
+      INGEST_REPOS_SERVICE_URL: http://repos_service:9000
       INGEST_QDRANT_URL: http://qdrant:6333
       INGEST_QDRANT_API_KEY: ""
       INGEST_HOST: 0.0.0.0
@@ -52,11 +51,25 @@ services:
     volumes:
       - ./backend/ingestion_service:/app/backend/ingestion_service
     depends_on:
-      - postgres
       - qdrant
-    # для автопрогона миграций:
-    # command: ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
-    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+
+  repos_service:
+    build:
+      context: .
+      dockerfile: backend/repos_service/Dockerfile
+    container_name: dopdoc_repos_service
+    environment:
+      REPOS_DATABASE_URL: postgresql+psycopg://dopdoc:dopdoc@postgres:5432/dopdoc
+      REPOS_DB_SCHEMA: "repos"
+      REPOS_HOST: 0.0.0.0
+      REPOS_PORT: 9000
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./backend/repos_service:/app/backend/repos_service
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pg_data:
