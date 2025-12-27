@@ -1,33 +1,26 @@
 {
-  "name": "frontend",
+  "name": "rag",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "workspaces": [
+    "host",
+    "mf-repos",
+    "mf-chat",
+    "shared"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "dev": "run-p dev:shared dev:repos dev:chat dev:host",
+    "dev:shared": "npm --workspace shared run build:watch",
+    "dev:repos": "npm --workspace mf-repos run dev",
+    "dev:chat": "npm --workspace mf-chat run dev",
+    "dev:host": "npm --workspace host run dev",
+    "build": "run-p -s build:shared build:repos build:chat build:host",
+    "build:shared": "npm --workspace shared run build:watch",
+    "build:host": "npm --workspace host run preview",
+    "build:repos": "npm --workspace mf-repos run preview",
+    "build:chat": "npm --workspace mf-chat run preview"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.19",
-    "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.3"
   }
 }
