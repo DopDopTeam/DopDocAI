@@ -10,16 +10,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install "poetry==${POETRY_VERSION}"
 
-WORKDIR /app/backend/repos_service
+WORKDIR /app
 
-COPY backend/repos_service/pyproject.toml backend/repos_service/poetry.lock* ./
-
+COPY backend/pyproject.toml backend/poetry.lock ./
 RUN poetry config virtualenvs.create false \
-  && poetry install --no-interaction --no-ansi
+  && poetry install --no-interaction --no-ansi --only main,repos
 
-COPY backend/repos_service/ ./
+COPY backend/repos_service ./backend/repos_service
+
+WORKDIR /app/backend/repos_service
 
 EXPOSE 9000
 
-# В dev-режиме (как у ingestion): миграции + reload
 CMD ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload"]
