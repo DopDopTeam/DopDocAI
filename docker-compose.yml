@@ -32,7 +32,7 @@ services:
   ingestion_service:
     build:
       context: .
-      dockerfile: backend/ingestion_service/Dockerfile.dev
+      dockerfile: backend/ingestion_service/Dockerfile
     container_name: dopdoc_ingestion_service
     environment:
       INGEST_REPOS_SERVICE_URL: http://repos_service:9000
@@ -67,6 +67,34 @@ services:
       - "9000:9000"
     volumes:
       - ./backend/repos_service:/app/backend/repos_service
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  chats_service:
+    build:
+      context: .
+      dockerfile: backend/chats_service/Dockerfile
+    container_name: dopdoc_chats_service
+    environment:
+      CHATS_DATABASE_URL: postgresql+psycopg://dopdoc:dopdoc@postgres:5432/dopdoc
+      CHATS_DB_SCHEMA: "chats"
+      CHATS_REPOS_SERVICE_URL: http://repos_service:9000
+      CHATS_HOST: 0.0.0.0
+      CHATS_PORT: 9100
+
+      CHATS_LLM_ROUTER_API: https://openrouter.ai/api/v1/chat/completions
+      CHATS_LLM_ROUTER_API_KEY: ""
+      CHATS_LLM_MODEL: "openai/gpt-4o-mini"
+      CHATS_LLM_TEMPERATURE: "0.2"
+      CHATS_LLM_MAX_TOKENS: "512"
+      CHATS_LLM_HISTORY_LIMIT: "20"
+      CHATS_LLM_DEFAULT_SYSTEM_PROMPT: "You are a helpful assistant."
+
+    ports:
+      - "9100:9100"
+    volumes:
+      - ./backend/chats_service:/app/backend/chats_service
     depends_on:
       postgres:
         condition: service_healthy

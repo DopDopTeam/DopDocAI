@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -5,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     POETRY_VERSION=1.8.3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl build-essential \
+    curl build-essential libpq-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pip install "poetry==${POETRY_VERSION}"
@@ -14,12 +15,12 @@ WORKDIR /app
 
 COPY backend/pyproject.toml backend/poetry.lock ./
 RUN poetry config virtualenvs.create false \
-  && poetry install --no-interaction --no-ansi --only main,ingest
+  && poetry install --no-interaction --no-ansi --only main,chats
 
-COPY backend/ingestion_service ./backend/ingestion_service
+COPY backend/chats_service ./backend/chats_service
 
-WORKDIR /app/backend/ingestion_service
+WORKDIR /app/backend/chats_service
 
-EXPOSE 8000
+EXPOSE 9100
 
-CMD ["bash", "-lc", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+CMD ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 9100 --reload"]
