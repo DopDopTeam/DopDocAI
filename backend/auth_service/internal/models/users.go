@@ -10,7 +10,6 @@ import (
 
 type Claims struct {
 	Username  string `json:"email"`
-	Role      string `json:"role"`
 	JTI       string `json:"jti"`
 	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims

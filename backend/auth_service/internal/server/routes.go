@@ -13,7 +13,7 @@ func setupRoutes(r *gin.Engine, authH *handlers.AuthHandler, healthH *handlers.H
 		public.GET("/ready", healthH.IsAppReady)
 		public.GET("/version", healthH.Version)
 		public.POST("/login", authH.Login)
-		// public.POST("/refresh", authHandler.Refresh)
+		public.POST("/refresh", authH.Refresh)
 		// public.POST("/logout", authHandler.Logout)
 	}
 }

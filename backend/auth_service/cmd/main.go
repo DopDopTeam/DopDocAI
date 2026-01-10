@@ -63,7 +63,7 @@ func main() {
 	log.Debug("Creating user repository...")
 	userRepo := repository.NewPGXUserRepository(dbpool)
 	authSvc := services.NewAuthService(userRepo, cfg.JWT)
-	authH := handlers.NewAuthHandler(authSvc)
+	authH := handlers.NewAuthHandler(authSvc, cfg.Cookie)
 	healthH := handlers.NewHealthHandler(&state.Ready, state.Cfg.Env, state.Build)
 
 	// если все запустилось удачно

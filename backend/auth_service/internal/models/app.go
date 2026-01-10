@@ -14,3 +14,8 @@ type JWT struct {
 	Secret     []byte
 	Pepper     []byte
 }
+
+type Cookie struct {
+	Domain string
+	Secure bool
+}

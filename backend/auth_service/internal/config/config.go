@@ -22,7 +22,8 @@ type Config struct {
 		DSN string
 	}
 
-	JWT models.JWT
+	JWT    models.JWT
+	Cookie models.Cookie
 
 	Logger LoggerConfig
 }
@@ -40,6 +41,9 @@ func Read() (Config, error) {
 	cfg.Env = getenv("ENV", "dev")
 	cfg.HTTP.Addr = getenv("HTTP_ADDR", ":8080")
 	cfg.DB.DSN = getenv("DB_DSN", "postgres://postgres:example@localhost:5432/doc_test")
+
+	cfg.Cookie.Secure = getenvBool("SECURE", false)
+	cfg.Cookie.Domain = getenv("DOMAIN", "test")
 
 	accessMin, err := atoi(getenv("JWT_ACCESS_TTL_MIN", "15"))
 	if err != nil {
@@ -79,6 +83,19 @@ func mustGetenv(k string) string {
 		panic("missing env: " + k)
 	}
 	return v
+}
+
+func getenvBool(k string, fallback bool) bool {
+	v := os.Getenv(k)
+	if v == "" {
+		return fallback
+	}
+
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 func atoi(s string) (int, error) { return strconv.Atoi(s) }

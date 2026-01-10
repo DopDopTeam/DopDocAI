@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
@@ -19,13 +20,13 @@ type UserRepository interface {
 
 type AuthService struct {
 	users UserRepository
-	jwt   models.JWT
+	Jwt   models.JWT
 }
 
 func NewAuthService(users UserRepository, jwt models.JWT) *AuthService {
 	return &AuthService{
 		users: users,
-		jwt:   jwt,
+		Jwt:   jwt,
 	}
 }
 
@@ -69,14 +70,14 @@ func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*mode
 		"username": req.Username,
 	}).Debug("Generating tokens")
 
-	accessToken, err := generateToken(req.Username, "access", s.jwt.AccessTTL, s.jwt.Secret)
+	accessToken, err := generateToken(req.Username, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate access token")
 		return nil, err
 	}
 
-	refreshToken, err := generateToken(req.Username, "refresh", s.jwt.RefreshTTL, s.jwt.Secret)
+	refreshToken, err := generateToken(req.Username, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate refresh token")
@@ -88,9 +89,51 @@ func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*mode
 		Username:     user.Username,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		AccessTTL:    s.jwt.AccessTTL,
+		AccessTTL:    s.Jwt.AccessTTL,
 	}, nil
 
+}
+
+func (s *AuthService) Refresh(reqToken string, ctx context.Context) (*models.LoginResult, error) {
+	log.Debug("Parsing token...")
+	claims, err := s.parseToken(reqToken, "refresh")
+	if err != nil {
+		log.WithError(err).Info("Token parsed with error")
+		return nil, err
+	}
+
+	user, err := s.users.GetByUsername(ctx, claims.Username)
+	if err != nil {
+		log.WithError(err).Warn("Trying refresh from deleted account")
+		return nil, err
+	}
+
+	log.WithFields(log.Fields{
+		"username":   claims.Username,
+		"email":      user.Email,
+		"jti":        claims.JTI,
+		"token_type": claims.TokenType,
+	}).Debug("Parsed token claims")
+
+	log.Debug("Generating access token...")
+	accessToken, err := generateToken(claims.Username, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("Generating refresh token...")
+	refreshToken, err := generateToken(claims.Username, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.LoginResult{
+		UserID:       user.ID,
+		Username:     user.Username,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		AccessTTL:    s.Jwt.AccessTTL,
+	}, nil
 }
 
 func generateToken(username string, tokenType string, ttl time.Duration, secret []byte) (string, error) {
@@ -109,25 +152,25 @@ func generateToken(username string, tokenType string, ttl time.Duration, secret 
 	return token.SignedString(secret)
 }
 
-// func parseToken(tokenString string, tokenType string) (*models.Claims, error) {
-// 	var claims models.Claims
-// 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
-// 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-// 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-// 		}
-// 		return config.JwtSecret, nil
-// 	})
-// 	if err != nil || !token.Valid {
-// 		return nil, errors.New("invalid token")
-// 	} else if claims, ok := token.Claims.(*models.Claims); ok {
-// 		log.WithField("token_id", claims.JTI).Info("Token parsed successfully")
-// 	} else {
-// 		return nil, errors.New("uknown claims, can't proceed")
-// 	}
+func (s *AuthService) parseToken(tokenString string, tokenType string) (*models.Claims, error) {
+	var claims models.Claims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.Jwt.Secret, nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid token")
+	} else if claims, ok := token.Claims.(*models.Claims); ok {
+		log.WithField("token_id", claims.JTI).Info("Token parsed successfully")
+	} else {
+		return nil, errors.New("uknown claims, can't proceed")
+	}
 
-// 	if claims.TokenType != tokenType {
-// 		return nil, errors.New("invalid token type")
-// 	}
+	if claims.TokenType != tokenType {
+		return nil, errors.New("invalid token type")
+	}
 
-// 	return &claims, nil
-// }
+	return &claims, nil
+}
