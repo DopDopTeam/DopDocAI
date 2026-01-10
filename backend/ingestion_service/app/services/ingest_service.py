@@ -1,10 +1,24 @@
-from shutil import rmtree
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from shutil import rmtree
 
-from app.api.models import RepoIngestRequest, RepoIngestResponse
+from app.api.models import RepoIngestRequest
 from app.pipeline.processor import process_repo_and_upsert
 from app.utils.url_converter import repo_url_to_slug, get_repo_name
 from app.infra.repos_client import ReposServiceClient
+
+@dataclass(frozen=True)
+class IngestJob:
+    repo_url: str
+    branch: str | None
+    user_id: int
+
+    slug: str
+    repo_name: str
+    collection: str
+
+    repository_id: int
+    state_id: int
 
 
 class IngestService:
@@ -15,7 +29,7 @@ class IngestService:
         self.qdrant_factory = qdrant_factory
         self.repos = repos_client
 
-    def ingest_repo(self, req: RepoIngestRequest) -> RepoIngestResponse:
+    def create_ingest_job(self, req: RepoIngestRequest) -> IngestJob:
         repo_url = str(req.repo_url)
         slug = repo_url_to_slug(repo_url)
         repo_name = get_repo_name(repo_url)
@@ -29,9 +43,7 @@ class IngestService:
         )
         repository_id = repo["id"]
 
-        # 2) create repo_index_state (без проверки пользователя в БД!)
-        # repos_service может (опционально) валидировать user_id через auth_service,
-        # но по твоему ТЗ он хранит user_id как число без FK.
+        # 2) create/get repo_index_state
         state = self.repos.create_index_state(
             user_id=req.user_id,
             repository_id=repository_id,
@@ -40,7 +52,27 @@ class IngestService:
         )
         state_id = state["id"]
 
-        # 3) mark processing
+        return IngestJob(
+            repo_url=repo_url,
+            branch=req.branch,
+            user_id=req.user_id,
+            slug=slug,
+            repo_name=repo_name,
+            collection=collection,
+            repository_id=repository_id,
+            state_id=state_id,
+        )
+
+    def run_ingest_job(self, job: IngestJob) -> None:
+        """
+        ВАЖНО: эта функция запускается через BackgroundTasks.
+        Она НЕ должна кидать исключения наружу (клиент уже получил 202 + id).
+        Ошибки отражаем статусом 'failed' в repos_service.
+        """
+        state_id = job.state_id
+        repository_id = job.repository_id
+
+        # mark processing
         self.repos.patch_index_state(state_id, {
             "status": "processing",
             "last_error": None,
@@ -50,18 +82,18 @@ class IngestService:
 
         repo_path = None
         try:
-            repo_path = self.git.clone(repo_url, req.branch)
+            repo_path = self.git.clone(job.repo_url, job.branch)
 
-            qdrant = self.qdrant_factory(collection)
+            qdrant = self.qdrant_factory(job.collection)
             total = process_repo_and_upsert(
                 root_path=repo_path,
-                repo_name=repo_name,
+                repo_name=job.repo_name,
                 treesitter=self.treesitter,
                 embedder=self.embedder,
                 qdrant=qdrant,
             )
 
-            # 4) update state success
+            # success
             self.repos.patch_index_state(state_id, {
                 "status": "done",
                 "vectors_upserted": total,
@@ -69,23 +101,13 @@ class IngestService:
                 "indexed_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            # 5) обновим репу (last_indexed_at)
             self.repos.touch_repository_indexed(repository_id)
-
-            return RepoIngestResponse(
-                repo=repo_url,
-                vectors_upserted=total,
-                repository_id=repository_id,
-                repo_index_state_id=state_id,
-                status="done",
-            )
 
         except Exception as e:
             self.repos.patch_index_state(state_id, {
                 "status": "failed",
                 "last_error": str(e),
             })
-            raise
         finally:
             if repo_path and repo_path.exists():
                 rmtree(repo_path, ignore_errors=True)
