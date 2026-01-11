@@ -8,6 +8,12 @@ class ReposRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def get_by_id(self, repo_id: int) -> Repository | None:
+        res = await self.db.execute(
+            select(Repository).where(Repository.id == repo_id)
+        )
+        return res.scalar_one_or_none()
+
     async def get_with_state(self, repo_id: int, user_id: int) -> tuple[Repository, RepoIndexState] | None:
         stmt = (
             select(Repository, RepoIndexState)

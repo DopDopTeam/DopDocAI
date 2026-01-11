@@ -70,7 +70,7 @@ class ReposService:
         return await self.repo.create(created)
 
     async def touch_indexed(self, repo_id: int) -> Repository:
-        repo = await self.repo.get_with_state(repo_id)
+        repo = await self.repo.get_by_id(repo_id)
         if not repo:
             raise ValueError("Repository not found")
 
