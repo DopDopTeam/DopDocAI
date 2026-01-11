@@ -6,7 +6,7 @@ on:
 jobs:
   smoke:
     name: Run on ARC runner
-    runs-on: k3s-arc
+    runs-on: arc-runners
     steps:
       - name: Hello
         run: |
