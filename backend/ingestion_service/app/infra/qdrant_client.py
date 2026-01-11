@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import PointStruct, Distance, VectorParams
+from qdrant_client.http.models import PointStruct, Distance, VectorParams, ScoredPoint
 from qdrant_client.http.exceptions import UnexpectedResponse
 from typing import List, Dict, Any, Optional
 import uuid
@@ -77,3 +77,13 @@ class QdrantManager:
     @property
     def total_upserted(self) -> int:
         return self._total_upserted
+
+    def search(self, query_vector: list[float], limit: int = 8) -> list:
+        res = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_vector,  # важно: query, не query_vector
+            limit=limit,
+            with_payload=True,
+        )
+        # В 1.16.x обычно возвращается объект, у которого .points
+        return list(res.points)

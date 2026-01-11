@@ -15,9 +15,11 @@ class RepoIndexService:
         return state
 
     async def create_or_get(self, user_id: int, repository_id: int, branch: str | None, qdrant_collection: str) -> RepoIndexState:
-        state = await self.repo.get_by_keys(user_id, repository_id, branch)
+        # branch больше не используем (единый state на user+repo)
+        branch = None
+
+        state = await self.repo.get_by_user_repo(user_id=user_id, repository_id=repository_id)
         if state:
-            # если стратегия коллекции поменялась — обновим
             state.qdrant_collection = qdrant_collection
             return await self.repo.save(state)
 
@@ -48,3 +50,10 @@ class RepoIndexService:
             state.indexed_at = datetime.fromisoformat(indexed_at.replace("Z", "+00:00"))
 
         return await self.repo.save(state)
+
+    async def get_by_user_repo(self, *, user_id: int, repository_id: int) -> RepoIndexState:
+        state = await self.repo.get_by_user_repo(user_id=user_id, repository_id=repository_id)
+        if not state:
+            raise ValueError("RepoIndexState not found")
+        return state
+

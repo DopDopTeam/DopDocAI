@@ -14,6 +14,15 @@ class RepoIndexStatesRepository:
         )
         return res.scalar_one_or_none()
 
+    async def get_by_user_repo(self, *, user_id: int, repository_id: int) -> RepoIndexState | None:
+        res = await self.db.execute(
+            select(RepoIndexState).where(
+                RepoIndexState.user_id == user_id,
+                RepoIndexState.repository_id == repository_id,
+            )
+        )
+        return res.scalar_one_or_none()
+
     async def get_by_keys(self, user_id: int, repository_id: int, branch: str | None) -> RepoIndexState | None:
         res = await self.db.execute(
             select(RepoIndexState).where(

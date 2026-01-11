@@ -89,6 +89,7 @@ services:
       CHATS_DATABASE_URL: postgresql+psycopg://dopdoc:dopdoc@postgres:5432/dopdoc
       CHATS_DB_SCHEMA: "chats"
       CHATS_REPOS_SERVICE_URL: http://repos_service:9000
+      CHATS_INGESTION_SERVICE_URL: http://ingestion_service:8000
       CHATS_HOST: 0.0.0.0
       CHATS_PORT: 9100
 
@@ -99,6 +100,8 @@ services:
       CHATS_LLM_MAX_TOKENS: "512"
       CHATS_LLM_HISTORY_LIMIT: "20"
       CHATS_LLM_DEFAULT_SYSTEM_PROMPT: "You are a helpful assistant."
+
+      CHATS_RAG_TOP_K: "8"
     ports:
       - "9100:9100"
     volumes:
@@ -106,6 +109,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ingestion_service:
+        condition: service_started
 
   auth_service:
     build:
@@ -121,7 +126,7 @@ services:
       REFRESH_PEPPER: pepper
     depends_on:
       postgres:
-        condition: service_healthy 
+        condition: service_healthy
 
 volumes:
   pg_data:

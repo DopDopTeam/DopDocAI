@@ -6,8 +6,9 @@ class Settings(BaseSettings):
 
     service_name: str = "chats_service"
 
-    repos_service_url: str = "http://localhost:9000"
+    repos_service_url: str = "http://172.17.0.1:9000"
     repos_service_timeout_s: float = 5.0
+    ingestion_service_url: str = "http://172.17.0.1:8000"
 
     database_url: str = "postgresql+psycopg://dopdoc:dopdoc@172.17.0.1:5432/dopdoc"
     db_schema: str = "chats"
@@ -18,14 +19,13 @@ class Settings(BaseSettings):
     # LLM router
     llm_router_api: str = "https://openrouter.ai/api/v1/chat/completions"
     llm_api_key: str = ""
-    llm_model: str = "openai/gpt-4o-mini"   # пример
-    llm_temperature: float = 0.2
+    llm_model: str = "deepseek/deepseek-v3.2"
+    llm_temperature: float = 0.5
     llm_max_tokens: int = 512
-
     # сколько сообщений истории подмешивать
     llm_history_limit: int = 20
+    llm_default_system_prompt: str = "You are a helpful assistant for answering questions related to code repositories."
 
-    # системный промпт по умолчанию (можно хранить и на чат-уровне)
-    default_system_prompt: str = "You are a helpful assistant."
+    rag_top_k: int = 8
 
 settings = Settings()
