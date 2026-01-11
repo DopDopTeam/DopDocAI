@@ -9,6 +9,7 @@ import (
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Config struct {
@@ -22,8 +23,9 @@ type Config struct {
 		DSN string
 	}
 
-	JWT    models.JWT
-	Cookie models.Cookie
+	JWT      models.JWT
+	HashCost int
+	Cookie   models.Cookie
 
 	Logger LoggerConfig
 }
@@ -58,6 +60,7 @@ func Read() (Config, error) {
 	cfg.JWT.RefreshTTL = time.Duration(refreshDays) * 24 * time.Hour
 	cfg.JWT.Secret = []byte(mustGetenv("JWT_SECRET"))
 	cfg.JWT.Pepper = []byte(mustGetenv("REFRESH_PEPPER"))
+	cfg.HashCost = getenvInt("HASH_COST", bcrypt.DefaultCost)
 
 	if cfg.JWT.AccessTTL <= 0 || cfg.JWT.RefreshTTL <= 0 {
 		return cfg, errors.New("invalid TTL values")
@@ -75,6 +78,20 @@ func getenv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+func getenvInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+
+	return i
 }
 
 func mustGetenv(k string) string {

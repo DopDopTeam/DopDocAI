@@ -9,23 +9,28 @@ import (
 )
 
 type Claims struct {
-	Username  string `json:"email"`
+	Email     string `json:"email"`
 	JTI       string `json:"jti"`
 	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
+	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required,min=8"`
 }
 
 type LoginResult struct {
 	UserID       int64
-	Username     string
+	Email        string
 	AccessToken  string
 	RefreshToken string
 	AccessTTL    time.Duration
+}
+
+type RegisterRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 // type RefreshRequest struct {
@@ -35,7 +40,6 @@ type LoginResult struct {
 // users
 type User struct {
 	ID           int64        `db:"id" json:"id"`
-	Username     string       `db:"username" json:"username"`
 	Email        string       `db:"email" json:"email"`
 	PasswordHash string       `db:"password_hash" json:"-"`
 	IsActive     bool         `db:"is_active" json:"is_active"`

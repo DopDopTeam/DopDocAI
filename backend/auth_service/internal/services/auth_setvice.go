@@ -10,40 +10,45 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserRepository interface {
 	GetByID(ctx context.Context, userID int64) (*models.User, error)
-	GetByUsername(ctx context.Context, username string) (*models.User, error)
+	// GetByUsername(ctx context.Context, username string) (*models.User, error)
 	CheckPassword(ctx context.Context, userID int64, password string) (bool, error)
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	CreateUser(ctx context.Context, name, passHash string) (*models.User, error)
 }
 
 type AuthService struct {
-	users UserRepository
-	Jwt   models.JWT
+	users    UserRepository
+	Jwt      models.JWT
+	hashCost int
 }
 
-func NewAuthService(users UserRepository, jwt models.JWT) *AuthService {
+func NewAuthService(users UserRepository, jwt models.JWT, hashCost int) *AuthService {
 	return &AuthService{
-		users: users,
-		Jwt:   jwt,
+		users:    users,
+		Jwt:      jwt,
+		hashCost: hashCost,
 	}
 }
 
 func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*models.LoginResult, error) {
-	log.WithField("username", req.Username).
+	log.WithField("email", req.Email).
 		Debug("Attempting to fetch user")
-	user, err := s.users.GetByUsername(ctx, req.Username)
+	user, err := s.users.GetByEmail(ctx, req.Email)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"username": req.Username,
-			"error":    err,
+			"email": req.Email,
+			"error": err,
 		}).Error("Failed to get user from repository")
 		return nil, err
 	}
 
 	if user == nil {
-		log.WithField("username", req.Username).
+		log.WithField("email", req.Email).
 			Warn("User not found")
 		return nil, errors.New("User not found")
 	}
@@ -67,17 +72,17 @@ func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*mode
 	}
 
 	log.WithFields(log.Fields{
-		"username": req.Username,
+		"email": req.Email,
 	}).Debug("Generating tokens")
 
-	accessToken, err := generateToken(req.Username, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
+	accessToken, err := generateToken(req.Email, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate access token")
 		return nil, err
 	}
 
-	refreshToken, err := generateToken(req.Username, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	refreshToken, err := generateToken(req.Email, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate refresh token")
@@ -86,7 +91,6 @@ func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*mode
 
 	return &models.LoginResult{
 		UserID:       user.ID,
-		Username:     user.Username,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		AccessTTL:    s.Jwt.AccessTTL,
@@ -102,49 +106,61 @@ func (s *AuthService) Refresh(reqToken string, ctx context.Context) (*models.Log
 		return nil, err
 	}
 
-	user, err := s.users.GetByUsername(ctx, claims.Username)
+	user, err := s.users.GetByEmail(ctx, claims.Email)
 	if err != nil {
 		log.WithError(err).Warn("Trying refresh from deleted account")
 		return nil, err
 	}
 
 	log.WithFields(log.Fields{
-		"username":   claims.Username,
-		"email":      user.Email,
+		"email":      claims.Email,
 		"jti":        claims.JTI,
 		"token_type": claims.TokenType,
 	}).Debug("Parsed token claims")
 
 	log.Debug("Generating access token...")
-	accessToken, err := generateToken(claims.Username, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
+	accessToken, err := generateToken(claims.Email, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debug("Generating refresh token...")
-	refreshToken, err := generateToken(claims.Username, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	refreshToken, err := generateToken(claims.Email, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.LoginResult{
 		UserID:       user.ID,
-		Username:     user.Username,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		AccessTTL:    s.Jwt.AccessTTL,
 	}, nil
 }
 
-func generateToken(username string, tokenType string, ttl time.Duration, secret []byte) (string, error) {
+func (s *AuthService) CreateUser(email, password string, ctx context.Context) (*models.User, error) {
+	hash, err := s.stringToHash(password)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.users.CreateUser(ctx, email, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func generateToken(email string, tokenType string, ttl time.Duration, secret []byte) (string, error) {
 	claims := models.Claims{
-		Username:  username,
+		Email:     email,
 		TokenType: tokenType,
 		JTI:       uuid.NewString(),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Subject:   username,
+			Subject:   email,
 		},
 	}
 
@@ -173,4 +189,12 @@ func (s *AuthService) parseToken(tokenString string, tokenType string) (*models.
 	}
 
 	return &claims, nil
+}
+
+func (s *AuthService) stringToHash(a string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(a), s.hashCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }

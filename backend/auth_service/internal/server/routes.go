@@ -7,13 +7,19 @@ import (
 
 func setupRoutes(r *gin.Engine, authH *handlers.AuthHandler, healthH *handlers.HealthHandler) {
 
-	public := r.Group("/")
+	v1 := r.Group("/v1")
+
+	health := v1.Group("/")
 	{
-		public.GET("/health", handlers.HealthCheck)
-		public.GET("/ready", healthH.IsAppReady)
-		public.GET("/version", healthH.Version)
-		public.POST("/login", authH.Login)
-		public.POST("/refresh", authH.Refresh)
-		// public.POST("/logout", authHandler.Logout)
+		health.GET("/health", handlers.HealthCheck)
+		health.GET("/ready", healthH.IsAppReady)
+		health.GET("/version", healthH.Version)
+	}
+
+	auth := v1.Group("/auth")
+	{
+		auth.POST("/login", authH.Login)
+		auth.POST("/refresh", authH.Refresh)
+		auth.POST("/register", authH.RegisterUser)
 	}
 }

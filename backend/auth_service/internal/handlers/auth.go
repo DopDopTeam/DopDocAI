@@ -42,7 +42,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		"token_type":  "bearer",
 		"expires_in":  loginResult.AccessTTL,
 		"user_id":     loginResult.UserID,
-		"username":    loginResult.Username})
+		"email":       loginResult.Email})
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
@@ -74,7 +74,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		"token_type":  "bearer",
 		"expires_in":  refreshResult.AccessTTL,
 		"user_id":     refreshResult.UserID,
-		"username":    refreshResult.Username})
+		"email":       refreshResult.Email})
 }
 
 func (h *AuthHandler) issueRefreshCookie(c *gin.Context, token string) {
