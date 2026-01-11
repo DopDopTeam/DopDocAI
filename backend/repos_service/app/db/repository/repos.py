@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Repository
+from app.db.models import Repository, RepoIndexState
 
 
 class ReposRepository:
@@ -20,13 +20,14 @@ class ReposRepository:
         )
         return res.scalar_one_or_none()
 
-    async def list(self, limit: int, offset: int) -> list[Repository]:
-        res = await self.db.execute(
+    async def list(self, user_id: int) -> list[Repository]:
+        stmt = (
             select(Repository)
+            .join(RepoIndexState, RepoIndexState.repository_id == Repository.id)
+            .where(RepoIndexState.user_id == user_id)
             .order_by(Repository.updated_at.desc())
-            .limit(limit)
-            .offset(offset)
         )
+        res = await self.db.execute(stmt)
         return list(res.scalars().all())
 
     async def create(self, repo: Repository) -> Repository:

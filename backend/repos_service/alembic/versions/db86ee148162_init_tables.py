@@ -54,7 +54,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id', 'repository_id', 'branch', name='uq_repo_index_state'),
+    sa.UniqueConstraint('user_id', 'repository_id', name='uq_repo_index_state'),
     schema=DB_SCHEMA
     )
 

@@ -14,8 +14,8 @@ class ReposService:
             raise ValueError("Repository not found")
         return repo
 
-    async def get_repos_list(self, limit: int, offset: int) -> list[Repository]:
-        return await self.repo.list(limit=limit, offset=offset)
+    async def get_repos_list(self, user_id: int) -> list[Repository]:
+        return await self.repo.list(user_id)
 
     async def upsert(self, url: str, slug: str, default_branch: str | None) -> Repository:
         existing = await self.repo.get_by_url(url)

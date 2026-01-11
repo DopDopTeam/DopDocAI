@@ -46,12 +46,20 @@ services:
       INGEST_OVERLAP: "64"
       INGEST_VECTOR_SIZE: "896"
       INGEST_QDRANT_BATCH_SIZE: "64"
+      # huggingface cache
+      HF_HOME: /hf_cache
+      TRANSFORMERS_CACHE: /hf_cache/transformers
+      SENTENCE_TRANSFORMERS_HOME: /hf_cache/sentence_transformers
     ports:
       - "8000:8000"
     volumes:
       - ./backend/ingestion_service:/app/backend/ingestion_service
+      - hf_cache:/hf_cache
     depends_on:
-      - qdrant
+      repos_service:
+        condition: service_started
+      qdrant:
+        condition: service_started
 
   repos_service:
     build:
@@ -102,3 +110,4 @@ services:
 volumes:
   pg_data:
   qdrant_data:
+  hf_cache:

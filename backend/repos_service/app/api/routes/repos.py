@@ -7,13 +7,12 @@ from app.services.repos_service import ReposService
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 
-@router.get("", response_model=list[RepositoryOut], name="get_repos_list")
+@router.get("/{user_id}/list", response_model=list[RepositoryOut], name="get_repos_list")
 async def get_repos_list(
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    user_id: int,
     service: ReposService = Depends(get_repos_service),
 ):
-    return await service.get_repos_list(limit=limit, offset=offset)
+    return await service.get_repos_list(user_id)
 
 
 @router.get("/{repo_id}", response_model=RepositoryOut, name="get_repository")
