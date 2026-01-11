@@ -41,7 +41,7 @@ func Read() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg.Env = getenv("ENV", "dev")
-	cfg.HTTP.Addr = getenv("HTTP_ADDR", ":8080")
+	cfg.HTTP.Addr = ":" + getenv("HTTP_ADDR", "8080")
 	cfg.DB.DSN = getenv("DB_DSN", "postgres://postgres:example@localhost:5432/doc_test")
 
 	cfg.Cookie.Secure = getenvBool("SECURE", false)

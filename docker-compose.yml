@@ -94,12 +94,11 @@ services:
 
       CHATS_LLM_ROUTER_API: https://openrouter.ai/api/v1/chat/completions
       CHATS_LLM_ROUTER_API_KEY: ""
-      CHATS_LLM_MODEL: "openai/gpt-4o-mini"
-      CHATS_LLM_TEMPERATURE: "0.2"
+      CHATS_LLM_MODEL: "deepseek/deepseek-v3.2"
+      CHATS_LLM_TEMPERATURE: "0.5"
       CHATS_LLM_MAX_TOKENS: "512"
       CHATS_LLM_HISTORY_LIMIT: "20"
       CHATS_LLM_DEFAULT_SYSTEM_PROMPT: "You are a helpful assistant."
-
     ports:
       - "9100:9100"
     volumes:
@@ -107,6 +106,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  auth_service:
+    build:
+      context: backend/auth_service
+      dockerfile: Dockerfile
+    container_name: dopdoc_auth_service
+    ports:
+      - "9200:9200"
+    environment:
+      HTTP_ADDR: "9200"
+      DB_DSN: postgres://dopdoc:dopdoc@postgres:5432/auth_db
+      JWT_SECRET: secret
+      REFRESH_PEPPER: pepper
+    depends_on:
+      postgres:
+        condition: service_healthy 
 
 volumes:
   pg_data:
