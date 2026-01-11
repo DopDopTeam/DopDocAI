@@ -44,7 +44,7 @@ class ChatService:
         return await self.chats.get(db, chat_id)
 
     async def list_chats(self, db: AsyncSession, *, user_id: int, repo_id: int | None, limit: int, offset: int):
-        return await self.chats.list(db, user_id=user_id, repo_id=repo_id, limit=limit, offset=offset)
+        return await self.chats.list_with_state(db, user_id=user_id, repo_id=repo_id, limit=limit, offset=offset)
 
     async def list_messages(self, db: AsyncSession, chat_id: uuid.UUID, *, limit: int, offset: int):
         return await self.messages.list_for_chat(db, chat_id, limit=limit, offset=offset)

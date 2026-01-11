@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import get_repos_service
-from app.schemas.repos import RepositoryOut, RepositoryUpsertIn
+from app.schemas.repos import RepositoryOut, RepositoryUpsertIn, RepositoryWithIndexStateOut
 from app.services.repos_service import ReposService
 
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 
-@router.get("/{user_id}/list", response_model=list[RepositoryOut], name="get_repos_list")
+@router.get("/{user_id}/list", response_model=list[RepositoryWithIndexStateOut], name="get_repos_list")
 async def get_repos_list(
     user_id: int,
     service: ReposService = Depends(get_repos_service),
@@ -15,13 +15,14 @@ async def get_repos_list(
     return await service.get_repos_list(user_id)
 
 
-@router.get("/{repo_id}", response_model=RepositoryOut, name="get_repository")
+@router.get("/{repo_id}", response_model=RepositoryWithIndexStateOut, name="get_repository")
 async def get_repository(
     repo_id: int,
+    user_id: int = Query(..., ge=1),
     service: ReposService = Depends(get_repos_service),
 ):
     try:
-        return await service.get_repository(repo_id)
+        return await service.get_repository(repo_id=repo_id, user_id=user_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
