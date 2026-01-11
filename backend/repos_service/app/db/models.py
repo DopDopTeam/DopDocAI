@@ -32,7 +32,7 @@ class Repository(Base):
 class RepoIndexState(Base):
     __tablename__ = "repo_index_states"
     __table_args__ = (
-        UniqueConstraint("user_id", "repository_id", "branch", name="uq_repo_index_state"),
+        UniqueConstraint("user_id", "repository_id", name="uq_repo_index_state"),
         {"schema": settings.db_schema},
     )
 

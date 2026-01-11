@@ -29,12 +29,15 @@ def get_qdrant(collection_name: str) -> QdrantManager:
 def get_git_client() -> GitClient:
     return GitClient()
 
+@lru_cache
+def get_repos_client() -> ReposServiceClient:
+    return ReposServiceClient(base_url=settings.repos_service_url)
+
 def get_ingest_service() -> IngestService:
-    repos_client = ReposServiceClient(base_url=settings.repos_service_url)
     return IngestService(
         git=get_git_client(),
         treesitter=get_treesitter(),
         embedder=get_embedder(),
         qdrant_factory=get_qdrant,
-        repos_client=repos_client,
+        repos_client=get_repos_client(),
     )
