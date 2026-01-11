@@ -13,8 +13,8 @@ class ReposServiceClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
 
-    async def ensure_repo_exists(self, repo_id: int) -> None:
-        url = f"{self.base_url}/repos/{repo_id}"
+    async def ensure_repo_exists(self, repo_id: int, user_id: int) -> None:
+        url = f"{self.base_url}/repos/{repo_id}?user_id={user_id}"
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:
             resp = await client.get(url)
 

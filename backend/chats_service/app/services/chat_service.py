@@ -34,7 +34,7 @@ class ChatService:
 
     async def create_chat(self, db: AsyncSession, *, repo_id: int, user_id: int):
         # validate repo exists via repos_service
-        await self.repos.ensure_repo_exists(repo_id)
+        await self.repos.ensure_repo_exists(repo_id, user_id)
 
         chat = await self.chats.create(db, repo_id=repo_id, user_id=user_id)
         await db.commit()
