@@ -54,6 +54,9 @@ class ChatService:
 
         llm_resp = await self.llm.generate(prompt=content, config=cfg, context=ctx)
 
+        # закрываем implicit транзакцию после SELECT'ов
+        await db.rollback()
+
         # persist both messages atomically
         async with db.begin():
             user_msg = await self.messages.create(db, chat_id=chat_id, role="user", content=content)
