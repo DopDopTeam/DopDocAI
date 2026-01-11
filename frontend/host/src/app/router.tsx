@@ -7,20 +7,19 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 export function createAppRouter() {
     return createBrowserRouter([
         { path: "/", element: <Navigate to="/app" replace /> },
-        //{ path: "/login", element: <LoginPage /> },
+
         {
             path: "/app",
-            // element: (
-            //     <ProtectedRoute>
-            //         <ShellPage />
-            //     </ProtectedRoute>
-            // ),
-            element: <ShellPage />
-            // children: [
-            //     { path: "", element: <ShellPage /> },
-            //     { path: "repos", element: <ShellPage /> },
-            //     { path: "chat", element: <ShellPage /> }
-            // ]
-        }
+            element: <ShellPage />,
+            children: [
+                { index: true, element: null },
+
+                { path: "repos/:repoId", element: null },
+
+                { path: "repos", element: <Navigate to="/app" replace /> },
+            ],
+        },
+
+        { path: "*", element: <Navigate to="/app" replace /> },
     ]);
 }

@@ -1,128 +1,53 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import {
-    Box,
-    Typography,
-    TextField,
-    Button,
-    Divider,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Alert
-} from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { type Message } from "@rag/shared";
-import {chatStore} from "../app/store";
+import { Divider } from "@mui/material";
 
-function isAssistant(m: Message) {
-    return m.role === "assistant";
-}
+import { chatStore } from "../app/store";
+import { useRepoIdFromParams } from "../hooks/useRepoIdFromParams";
+import { useAutoScroll } from "../hooks/useAutoScroll";
+
+import { ChatRoot } from "./ChatRoot";
+import { ChatBlocked } from "./ChatBlocked";
+import { ChatHeader } from "./ChatHeader";
+import { ChatStatus } from "./ChatStatus";
+import { ChatMessageList } from "./ChatMessageList";
+import { ChatComposer } from "./ChatComposer";
 
 export const ChatPanel = observer(function ChatPanel() {
     const chat = chatStore;
-    const [text, setText] = useState("");
 
-    const bottomRef = useRef<HTMLDivElement | null>(null);
+    const repoId = useRepoIdFromParams();
+    const bottomRef = useAutoScroll(chat.messages.length);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [chat.messages.length]);
+        void chat.openRepo(repoId);
+    }, [repoId, chat]);
 
-    async function onSend() {
-        const v = text.trim();
-        if (!v) return;
-        setText("");
-        await chat.sendMessage(v);
+    if (chat.isBlocked) {
+        return (
+            <ChatRoot>
+                <ChatBlocked />
+            </ChatRoot>
+        );
     }
 
     return (
-        <Box sx={{ p: 2, width: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                Chat
-            </Typography>
-
-            {chat.error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {chat.error}
-                </Alert>
-            )}
-
-            <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", pr: 1 }}>
-                {chat.messages.map((m) => (
-                    <Box
-                        key={m.id}
-                        sx={{
-                            mb: 2,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: m.role === "user" ? "flex-end" : "flex-start"
-                        }}
-                    >
-                        <Box
-                            sx={{
-                                maxWidth: "900px",
-                                width: "fit-content",
-                                p: 1.5,
-                                borderRadius: 2,
-                                border: "1px solid rgba(255,255,255,0.12)"
-                            }}
-                        >
-                            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                                {m.content}
-                            </Typography>
-                        </Box>
-
-                        {isAssistant(m) && (
-                            <Box sx={{ mt: 1, width: "100%", maxWidth: "900px" }}>
-                                <Accordion defaultExpanded={false}>
-                                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                        <Typography variant="caption">Sources</Typography>
-                                    </AccordionSummary>
-                                    <AccordionDetails>
-                                        {m.sources && m.sources.length > 0 ? (
-                                            <Box sx={{ display: "grid", gap: 0.5 }}>
-                                                {m.sources.map((s, idx) => (
-                                                    <Typography key={idx} variant="caption" sx={{ opacity: 0.9 }}>
-                                                        - {s.path}:{s.start_line}–{s.end_line}
-                                                    </Typography>
-                                                ))}
-                                            </Box>
-                                        ) : (
-                                            <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                                                Источники не найдены
-                                            </Typography>
-                                        )}
-                                    </AccordionDetails>
-                                </Accordion>
-                            </Box>
-                        )}
-                    </Box>
-                ))}
-                <div ref={bottomRef} />
-            </Box>
+        <ChatRoot>
+            <ChatHeader repoSlug={chat.repoSlug} />
 
             <Divider sx={{ my: 2 }} />
 
-            <Box sx={{ display: "flex", gap: 1 }}>
-                <TextField
-                    size="small"
-                    placeholder={"Ask about the repository…"}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    fullWidth
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            void onSend();
-                        }
-                    }}
-                />
-                <Button variant="contained" onClick={() => void onSend()}>
-                    Send
-                </Button>
-            </Box>
-        </Box>
+            <ChatStatus error={chat.error} loading={chat.loading} />
+
+            <ChatMessageList messages={chat.messages} loading={chat.loading} bottomRef={bottomRef} />
+
+            <Divider sx={{ my: 2 }} />
+
+            <ChatComposer
+                disabled={chat.loading || chat.sending}
+                onSend={(content) => chat.sendMessage(content)}
+            />
+        </ChatRoot>
     );
 });
 

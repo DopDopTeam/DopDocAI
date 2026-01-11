@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,23 +12,21 @@ import {
     Chip,
     Typography,
     Snackbar,
-    Alert
+    Alert,
 } from "@mui/material";
-import { type Repo, type RepoStatus } from "@rag/shared";
-import { repoStore  } from "../app/store";
+import type { RepoWithIndexState } from "@rag/shared";
+import { repoStore } from "../app/store";
 
-function statusColor(
-    status: RepoStatus
-): "default" | "warning" | "success" | "error" {
-    if (status === "ready") return "success";
-    if (status === "indexing" || status === "new") return "warning";
-    if (status === "error") return "error";
+function statusColor(status?: string): "default" | "warning" | "success" | "error" {
+    if (status === "done") return "success";
+    if (status === "processing" || status === "queued") return "warning";
+    if (status === "failed") return "error";
     return "default";
 }
 
 export const RepoSidebar = observer(function RepoSidebar() {
     const repos = repoStore;
-    //const navigate = useNavigate();
+    const navigate = useNavigate();
     const { repoId } = useParams<{ repoId: string }>();
 
     const [url, setUrl] = useState("");
@@ -37,40 +35,34 @@ export const RepoSidebar = observer(function RepoSidebar() {
     const selectedRepoId = repoId ? Number(repoId) : null;
 
     const sorted = useMemo(() => {
-        const prio = (s: RepoStatus) =>
-            s === "indexing" || s === "new" ? 0 : s === "ready" ? 1 : 2;
-
-        return [...repos.repos].sort(
-            (a, b) => prio(a.status) - prio(b.status)
-        );
+        const prio = (s?: string) => (s === "queued" || s === "processing" ? 0 : s === "done" ? 1 : 2);
+        return [...repos.repos].sort((a, b) => prio(a.index_state?.status) - prio(b.index_state?.status));
     }, [repos.repos]);
 
     async function onAdd() {
         try {
-            const created = await repos.createRepo({ url });
+            const created = await repos.startIndexing(url);
             setUrl("");
-            setSnack("Repository added");
-
-            //navigate(`app/repos/${created.id}`);
-        } catch {
-            setSnack("Failed to add repository");
+            setSnack("Repository indexing started");
+            navigate(`/app/repos/${created.repo.id}`);
+        } catch (e) {
+            setSnack(e instanceof Error ? e.message : "Failed to add repository");
         }
     }
 
-    function onSelect(r: Repo) {
-        // 🔑 только навигация, без бизнес-логики
-        //navigate(`/repos/${r.id}`);
+    function onSelect(r: RepoWithIndexState) {
+        navigate(`/app/repos/${r.id}`);
     }
 
     useEffect(() => {
-        void repos.loadRepos();
+        void repos.init();
         return () => repos.dispose();
     }, [repos]);
 
     return (
         <Box sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column", gap: 2 }}>
             <Box>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                <Typography variant="h6" sx={{ mb: 1 }}>
                     Repositories
                 </Typography>
 
@@ -83,7 +75,7 @@ export const RepoSidebar = observer(function RepoSidebar() {
                         fullWidth
                     />
                     <Button variant="contained" onClick={onAdd} disabled={!url.trim()}>
-                        Add
+                        INDEX
                     </Button>
                 </Box>
             </Box>
@@ -105,19 +97,19 @@ export const RepoSidebar = observer(function RepoSidebar() {
                                 primary={
                                     <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                                         <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
-                                            {r.url}
+                                            {r.slug}
                                         </Typography>
                                         <Chip
                                             size="small"
-                                            label={r.status}
-                                            color={statusColor(r.status)}
+                                            label={r.index_state?.status ?? "unknown"}
+                                            color={statusColor(r.index_state?.status)}
                                         />
                                     </Box>
                                 }
                                 secondary={
-                                    r.status === "error" && r.last_error ? (
+                                    r.index_state?.status === "error" && r.index_state.last_error ? (
                                         <Typography variant="caption" color="error">
-                                            {r.last_error}
+                                            {r.index_state.last_error}
                                         </Typography>
                                     ) : null
                                 }
@@ -127,11 +119,7 @@ export const RepoSidebar = observer(function RepoSidebar() {
                 </List>
             </Box>
 
-            <Snackbar
-                open={Boolean(snack)}
-                autoHideDuration={2500}
-                onClose={() => setSnack(null)}
-            >
+            <Snackbar open={Boolean(snack)} autoHideDuration={2500} onClose={() => setSnack(null)}>
                 <Alert severity="info" onClose={() => setSnack(null)}>
                     {snack}
                 </Alert>

@@ -12,7 +12,7 @@ export const TopBar = observer(function TopBar() {
         <AppBar position="static" elevation={0}>
             <Toolbar sx={{ gap: 2 }}>
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                    GitHub Repo RAG
+                    DopDocAI
                 </Typography>
 
                 {auth.isAuthenticated && (
