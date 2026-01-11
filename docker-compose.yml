@@ -93,7 +93,7 @@ services:
       CHATS_PORT: 9100
 
       CHATS_LLM_ROUTER_API: https://openrouter.ai/api/v1/chat/completions
-      CHATS_LLM_ROUTER_API_KEY: ""
+      CHATS_LLM_API_KEY: ""
       CHATS_LLM_MODEL: "deepseek/deepseek-v3.2"
       CHATS_LLM_TEMPERATURE: "0.5"
       CHATS_LLM_MAX_TOKENS: "512"
