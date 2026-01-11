@@ -30,15 +30,27 @@ export default defineConfig({
             }
         })
     ],
-
     server: {
         port: 5173,
         strictPort: true,
         proxy: {
-            "/api": {
+            "/api/ingest": {
                 target: "http://localhost:8000",
                 changeOrigin: true,
                 secure: false,
+                rewrite: (p) => p.replace(/^\/api/, ""), // /api/ingest/repo -> /ingest/repo
+            },
+            "/api/chats": {
+                target: "http://localhost:9100",
+                changeOrigin: true,
+                secure: false,
+                rewrite: (p) => p.replace(/^\/api/, ""), // /api/chats -> /chats
+            },
+            "/api": {
+                target: "http://localhost:9000",
+                changeOrigin: true,
+                secure: false,
+                rewrite: (p) => p.replace(/^\/api/, ""), // /api/repos -> /repos
             },
         },
     },

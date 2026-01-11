@@ -1,18 +1,34 @@
-export type RepoStatus = "new" | "indexing" | "ready" | "error";
-
-export interface Repo {
+export interface Repository {
     id: number;
     url: string;
-    status: RepoStatus;
-    last_error?: string | null;
-    updated_at?: string;
+    slug: string;
+    default_branch: string | null;
+    last_indexed_at: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
-export interface Chat {
-    id: string;
-    repo_id: string;
-    created_at?: string;
+export type RepoIndexStatus = "new" | "indexing" | "ready" | "error" | string;
+
+export interface RepoIndexState {
+    id: number;
+    user_id: number;
+    repository_id: number;
+    branch: string | null;
+    qdrant_collection: string;
+    status: RepoIndexStatus;
+    vectors_upserted: number;
+    last_error: string | null;
+    indexed_at: string | null;
+    created_at: string;
+    updated_at: string;
 }
+export type ChatMessage = {
+    id: string;
+    chat_id: string;
+    role: MessageRole;
+    content: string;
+};
 
 export type MessageRole = "user" | "assistant";
 
@@ -24,11 +40,16 @@ export interface Source {
 
 export interface Message {
     id: string;
-    repo_id: string;
+    repo_id: number;          // теперь repo_id логично number (как repoId)
     role: MessageRole;
     content: string;
     created_at?: string;
-
-    // For assistant messages we may have sources (always show UI even if empty)
     sources?: Source[];
 }
+
+/**
+ * Удобный тип для UI: репозиторий + его текущий индекс-стейт (опционально)
+ */
+export type RepoWithIndexState = Repository & {
+    index_state?: RepoIndexState;
+};

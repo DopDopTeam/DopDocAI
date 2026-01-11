@@ -6,12 +6,19 @@ export const endpoints = {
         login: "/auth/login"
     },
     repos: {
-        list: "/repos",
-        create: "/repos"
+        list: (userId: number) => `/repos/${userId}/list`,
+        get: (repoId: number) => `/repos/${repoId}`,
     },
-    chat: {
-        // get-or-create chat for a repo
-        messages: (repoId: string) => `/chats/${repoId}/messages`,
-        send: (repoId: string) => `/chats/${repoId}/messages`
-    }
+    repoIndexStates: {
+        createOrGet: "/repo-index-states",
+        get: (stateId: number) => `/repo-index-states/${stateId}`,
+        patch: (stateId: number) => `/repo-index-states/${stateId}`,
+    },
+    ingest: "/ingest/repo",
+    chats: {
+        list: "/chats",
+        create: "/chats",
+        messages: (chatId: string) => `/chats/${chatId}/messages`,
+        send: (chatId: string) => `/chats/${chatId}/messages`,
+    },
 };

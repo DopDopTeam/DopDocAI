@@ -1,10 +1,12 @@
 import { makeAutoObservable, runInAction } from "mobx";
-import { api, endpoints } from "@rag/shared";
-import type { Message } from "@rag/shared";
+import {api, endpoints} from "@rag/shared";
 import type {
-    AssistantAnswer,
-    ListMessagesResponse,
+    Repository,
+    ChatResponse,
+    MessageResponse,
     SendMessageRequest,
+    SendMessageResponse,
+    ChatMessage
 } from "@rag/shared";
 
 function makeTempId(prefix: string) {
@@ -12,12 +14,18 @@ function makeTempId(prefix: string) {
 }
 
 export class ChatStore {
-    repoId: string | null = null;
+    repoId: number | null = null;
+    repoSlug: string | null = null;
 
-    messages: Message[] = [];
+    chatId: string | null = null;
+
+    messages: ChatMessage[] = [];
     loading = false;
     sending = false;
     error: string | null = null;
+
+    // заглушка, пока нет auth middleware
+    userId = 1;
 
     private loadSeq = 0;
     private sendSeq = 0;
@@ -26,65 +34,118 @@ export class ChatStore {
         makeAutoObservable(this, {}, { autoBind: true });
     }
 
-    setRouteRepoId(repoId: string | null) {
-        this.repoId = repoId;
-
-        this.messages = [];
-        this.error = null;
+    get isBlocked() {
+        return this.repoId == null;
     }
 
-    async loadMessages() {
-        const repoId = this.repoId;
-
-        if (!repoId) {
-            runInAction(() => {
-                this.messages = [];
-                this.loading = false;
-                this.error = null;
-            });
-            return;
-        }
-
+    /** Вызывается при смене route param */
+    async openRepo(repoId: number | null) {
         const seq = ++this.loadSeq;
 
         runInAction(() => {
-            this.loading = true;
+            this.repoId = repoId;
+            this.repoSlug = null;
+            this.chatId = null;
+            this.messages = [];
             this.error = null;
+            this.loading = repoId != null;
+            this.sending = false;
         });
 
-        try {
-            const res = await api.get<ListMessagesResponse>(
-                endpoints.chat.messages(repoId)
-            );
+        if (repoId == null) return;
 
-            if (seq !== this.loadSeq || repoId !== this.repoId) return;
+        try {
+            // 1) repo meta (нужен slug)
+            const repoRes = await api.get<Repository>(endpoints.repos.get(repoId));
+            if (seq !== this.loadSeq || this.repoId !== repoId) return;
 
             runInAction(() => {
-                this.messages = res.data.items;
+                this.repoSlug = repoRes.data.slug;
+            });
+
+            // 2) найти существующий чат (если есть), иначе создать
+            const chatId = await this.ensureChat(repoId, seq);
+            if (!chatId) return;
+
+            // 3) загрузить сообщения
+            await this.loadMessages(chatId, seq);
+
+            if (seq !== this.loadSeq) return;
+            runInAction(() => {
                 this.loading = false;
             });
         } catch (e) {
             if (seq !== this.loadSeq) return;
-
             runInAction(() => {
-                this.error = "Failed to load messages";
                 this.loading = false;
+                this.error = "Failed to open chat";
             });
             throw e;
         }
     }
 
-    async sendMessage(content: string) {
-        const repoId = this.repoId;
-        const trimmed = content.trim();
+    private async ensureChat(repoId: number, seq: number): Promise<string | null> {
+        // сначала пробуем list (вдруг уже создан)
+        const listRes = await api.get<ChatResponse[]>(endpoints.chats.list, {
+            params: { user_id: this.userId, repo_id: repoId, limit: 1, offset: 0 },
+        });
 
-        if (!repoId) {
+        if (seq !== this.loadSeq || this.repoId !== repoId) return null;
+
+        const existing = listRes.data?.[0];
+        if (existing) {
             runInAction(() => {
-                this.error = "No repository selected";
+                this.chatId = String(existing.id);
+            });
+            return String(existing.id);
+        }
+
+        // иначе create
+        const createRes = await api.post<ChatResponse>(endpoints.chats.create, {
+            user_id: this.userId,
+            repo_id: repoId,
+        });
+
+        if (seq !== this.loadSeq || this.repoId !== repoId) return null;
+
+        runInAction(() => {
+            this.chatId = String(createRes.data.id);
+        });
+
+        return String(createRes.data.id);
+    }
+
+    private async loadMessages(chatId: string, seq: number) {
+        const res = await api.get<MessageResponse[]>(endpoints.chats.messages(chatId), {
+            params: { limit: 200, offset: 0 },
+        });
+
+        if (seq !== this.loadSeq) return;
+
+        const mapped: ChatMessage[] = res.data.map((m) => ({
+            id: String(m.id),
+            chat_id: String(m.chat_id),
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.content,
+        }));
+
+        runInAction(() => {
+            this.messages = mapped;
+        });
+    }
+
+    async sendMessage(content: string) {
+        const trimmed = content.trim();
+        const chatId = this.chatId;
+
+        if (!trimmed) return;
+
+        if (!chatId || this.repoId == null) {
+            runInAction(() => {
+                this.error = "Select a repository first";
             });
             return;
         }
-        if (!trimmed) return;
 
         const seq = ++this.sendSeq;
 
@@ -93,19 +154,21 @@ export class ChatStore {
             this.error = null;
         });
 
-        const optimisticUser: Message = {
-            id: makeTempId("user"),
-            repo_id: repoId,
+        const optimisticUserId = makeTempId("user");
+        const placeholderId = makeTempId("assistant");
+
+        const optimisticUser: ChatMessage = {
+            id: optimisticUserId,
+            chat_id: chatId,
             role: "user",
             content: trimmed,
         };
 
-        const placeholderAssistant: Message = {
-            id: makeTempId("assistant"),
-            repo_id: repoId,
+        const placeholderAssistant: ChatMessage = {
+            id: placeholderId,
+            chat_id: chatId,
             role: "assistant",
             content: "Думаю…",
-            sources: [],
         };
 
         runInAction(() => {
@@ -115,33 +178,37 @@ export class ChatStore {
         try {
             const req: SendMessageRequest = { content: trimmed };
 
-            const res = await api.post<AssistantAnswer>(
-                endpoints.chat.send(repoId),
-                req
-            );
+            const res = await api.post<SendMessageResponse>(endpoints.chats.send(chatId), req);
 
-            if (seq !== this.sendSeq || repoId !== this.repoId) return;
+            if (seq !== this.sendSeq) return;
+
+            const userMsg: ChatMessage = {
+                id: String(res.data.user_message.id),
+                chat_id: String(res.data.user_message.chat_id),
+                role: "user",
+                content: res.data.user_message.content,
+            };
+
+            const assistantMsg: ChatMessage = {
+                id: String(res.data.assistant_message.id),
+                chat_id: String(res.data.assistant_message.chat_id),
+                role: "assistant",
+                content: res.data.assistant_message.content,
+            };
 
             runInAction(() => {
-                this.messages = this.messages.map((m) =>
-                    m.id === placeholderAssistant.id
-                        ? { ...res.data.message, sources: res.data.sources ?? [] }
-                        : m
-                );
+                this.messages = this.messages.map((m) => {
+                    if (m.id === optimisticUserId) return userMsg;
+                    if (m.id === placeholderId) return assistantMsg;
+                    return m;
+                });
                 this.sending = false;
             });
         } catch (e) {
             if (seq !== this.sendSeq) return;
-
             runInAction(() => {
                 this.messages = this.messages.map((m) =>
-                    m.id === placeholderAssistant.id
-                        ? {
-                            ...m,
-                            content: "Ошибка при получении ответа",
-                            sources: [],
-                        }
-                        : m
+                    m.id === placeholderId ? { ...m, content: "Ошибка при получении ответа" } : m
                 );
                 this.sending = false;
                 this.error = "Failed to send message";
@@ -151,11 +218,16 @@ export class ChatStore {
     }
 
     reset() {
-        this.messages = [];
-        this.error = null;
-        this.loading = false;
-        this.sending = false;
-        this.loadSeq = 0;
-        this.sendSeq = 0;
+        runInAction(() => {
+            this.repoId = null;
+            this.repoSlug = null;
+            this.chatId = null;
+            this.messages = [];
+            this.error = null;
+            this.loading = false;
+            this.sending = false;
+            this.loadSeq = 0;
+            this.sendSeq = 0;
+        });
     }
 }
