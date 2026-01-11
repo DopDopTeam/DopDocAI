@@ -2,114 +2,195 @@ package services
 
 import (
 	"context"
-	"net/http"
+	"errors"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserRepository interface {
 	GetByID(ctx context.Context, userID int64) (*models.User, error)
-	GetByUsername(ctx context.Context, username string) (*models.User, error)
+	// GetByUsername(ctx context.Context, username string) (*models.User, error)
 	CheckPassword(ctx context.Context, userID int64, password string) (bool, error)
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	CreateUser(ctx context.Context, name, passHash string) (int64, error)
 }
 
 type AuthService struct {
-	users     UserRepository
-	jwtSecret []byte
+	users    UserRepository
+	Jwt      models.JWT
+	hashCost int
 }
 
-func NewAuthService(users UserRepository, jwtSecret []byte) *AuthService {
-	return &AuthService{users: users}
-}
-
-func (s *AuthService) Login(c *gin.Context) {
-	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
-		return
+func NewAuthService(users UserRepository, jwt models.JWT, hashCost int) *AuthService {
+	return &AuthService{
+		users:    users,
+		Jwt:      jwt,
+		hashCost: hashCost,
 	}
+}
 
-	log.WithField("username", req.Username).
+func (s *AuthService) Login(req models.LoginRequest, ctx context.Context) (*models.LoginResult, error) {
+	log.WithField("email", req.Email).
 		Debug("Attempting to fetch user")
-	user, err := s.users.GetByUsername(c.Request.Context(), req.Username)
+	user, err := s.users.GetByEmail(ctx, req.Email)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"username": req.Username,
-			"error":    err,
+			"email": req.Email,
+			"error": err,
 		}).Error("Failed to get user from repository")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request"})
-		return
+		return nil, err
 	}
 
 	if user == nil {
-		log.WithField("username", req.Username).
+		log.WithField("email", req.Email).
 			Warn("User not found")
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "input error"})
-		return
+		return nil, errors.New("User not found")
 	}
 
 	log.WithField("userID", user.ID).
 		Debug("Checking user password")
 
-	auth, err := s.users.CheckPassword(c.Request.Context(), user.ID, req.Password)
+	auth, err := s.users.CheckPassword(ctx, user.ID, req.Password)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"userID": user.ID,
 			"error":  err,
 		}).Error("Error while checking password")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check user creds"})
-		return
+		return nil, err
 	}
 
 	if !auth {
 		log.WithField("userID", user.ID).
 			Warn("Password mismatch")
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "authorization failed"})
-		return
+		return nil, errors.New("Password mismatch")
 	}
 
 	log.WithFields(log.Fields{
-		"username": req.Username,
+		"email": req.Email,
 	}).Debug("Generating tokens")
 
-	accessToken, err := generateToken(req.Username, "access", 5*time.Minute, s.jwtSecret)
+	accessToken, err := generateToken(user.ID, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
 	if err != nil {
 		log.WithError(err).
 			Error("Failed to generate access token")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create access token"})
-		return
+		return nil, err
 	}
 
-	// refreshToken, err := generateToken(req.Username, role, "refresh", 7*24*time.Hour, config.JwtSecret)
-	// if err != nil {
-	// 	log.WithError(err).
-	// 		Error("Failed to generate refresh token")
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create refresh token"})
-	// 	return
-	// }
+	refreshToken, err := generateToken(user.ID, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	if err != nil {
+		log.WithError(err).
+			Error("Failed to generate refresh token")
+		return nil, err
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"user":               user,
-		"access_token":       accessToken,
-		"token_type":         "bearer",
-		"refresh_expires_in": 1800, // seconds (30 mins)
-	})
+	return &models.LoginResult{
+		UserID:       user.ID,
+		Email:        user.Email,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		AccessTTL:    s.Jwt.AccessTTL,
+	}, nil
+
 }
 
-func generateToken(username string, tokenType string, ttl time.Duration, secret []byte) (string, error) {
+func (s *AuthService) Refresh(reqToken string, ctx context.Context) (*models.LoginResult, error) {
+	log.Debug("Parsing token...")
+	claims, err := s.ParseToken(reqToken, "refresh")
+	if err != nil {
+		log.WithError(err).Info("Token parsed with error")
+		return nil, err
+	}
+
+	user, err := s.users.GetByID(ctx, claims.UserID)
+	if err != nil {
+		log.WithError(err).Warn("Trying refresh from deleted account")
+		return nil, err
+	}
+
+	log.WithFields(log.Fields{
+		"jti":        claims.JTI,
+		"token_type": claims.TokenType,
+	}).Debug("Parsed token claims")
+
+	log.Debug("Generating access token...")
+	accessToken, err := generateToken(user.ID, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("Generating refresh token...")
+	refreshToken, err := generateToken(user.ID, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.LoginResult{
+		UserID:       user.ID,
+		Email:        user.Email,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		AccessTTL:    s.Jwt.AccessTTL,
+	}, nil
+}
+
+func (s *AuthService) RegisterUser(email, password string, ctx context.Context) (*models.RegisterResult, error) {
+	hash, err := s.stringToHash(password)
+	if err != nil {
+		return nil, err
+	}
+
+	userID, err := s.users.CreateUser(ctx, email, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, err := generateToken(userID, "access", s.Jwt.AccessTTL, s.Jwt.Secret)
+	if err != nil {
+		log.WithError(err).
+			Error("Failed to generate access token")
+		return nil, err
+	}
+
+	refreshToken, err := generateToken(userID, "refresh", s.Jwt.RefreshTTL, s.Jwt.Secret)
+	if err != nil {
+		log.WithError(err).
+			Error("Failed to generate refresh token")
+		return nil, err
+	}
+
+	return &models.RegisterResult{
+		UserID:       user.ID,
+		Email:        user.Email,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		AccessTTL:    s.Jwt.AccessTTL,
+	}, nil
+}
+
+func generateToken(userID int64, tokenType string, ttl time.Duration, secret []byte) (string, error) {
+	now := time.Now()
+
 	claims := models.Claims{
-		Username:  username,
+		UserID:    userID,
 		TokenType: tokenType,
 		JTI:       uuid.NewString(),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Subject:   username,
+			Subject:   strconv.FormatInt(userID, 10),
+			Issuer:    "auth-service",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 	}
 
@@ -117,25 +198,33 @@ func generateToken(username string, tokenType string, ttl time.Duration, secret 
 	return token.SignedString(secret)
 }
 
-// func parseToken(tokenString string, tokenType string) (*models.Claims, error) {
-// 	var claims models.Claims
-// 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
-// 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-// 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-// 		}
-// 		return config.JwtSecret, nil
-// 	})
-// 	if err != nil || !token.Valid {
-// 		return nil, errors.New("invalid token")
-// 	} else if claims, ok := token.Claims.(*models.Claims); ok {
-// 		log.WithField("token_id", claims.JTI).Info("Token parsed successfully")
-// 	} else {
-// 		return nil, errors.New("uknown claims, can't proceed")
-// 	}
+func (s *AuthService) ParseToken(tokenString string, tokenType string) (*models.Claims, error) {
+	var claims models.Claims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.Jwt.Secret, nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid token")
+	} else if claims, ok := token.Claims.(*models.Claims); ok {
+		log.WithField("token_id", claims.JTI).Info("Token parsed successfully")
+	} else {
+		return nil, errors.New("uknown claims, can't proceed")
+	}
 
-// 	if claims.TokenType != tokenType {
-// 		return nil, errors.New("invalid token type")
-// 	}
+	if claims.TokenType != tokenType {
+		return nil, errors.New("invalid token type")
+	}
 
-// 	return &claims, nil
-// }
+	return &claims, nil
+}
+
+func (s *AuthService) stringToHash(a string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(a), s.hashCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}

@@ -12,9 +12,9 @@ type Server struct {
 	addr   string
 }
 
-func StartServer(authH *handlers.AuthHandler, addr string) *Server {
+func StartServer(authH *handlers.AuthHandler, HealthH *handlers.HealthHandler, addr string) *Server {
 	r := gin.Default()
-	setupRoutes(r, authH)
+	setupRoutes(r, authH, HealthH)
 	return &Server{
 		router: r,
 		addr:   addr,
