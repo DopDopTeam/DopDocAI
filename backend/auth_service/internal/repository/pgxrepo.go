@@ -56,7 +56,7 @@ func (r *PGXUserRepository) GetByEmail(ctx context.Context, email string) (*mode
 		is_active,
 		created_at,
 		last_login_at
-	from users where emai; = $1`, email).Scan(
+	from users where email = $1`, email).Scan(
 		&user.ID,
 		&user.Email,
 		&user.IsActive,
@@ -98,14 +98,14 @@ func (r *PGXUserRepository) GetByID(ctx context.Context, userID int64) (*models.
 	return &user, nil
 }
 
-func (r *PGXUserRepository) CreateUser(ctx context.Context, name, passHash string) (*models.User, error) {
+func (r *PGXUserRepository) CreateUser(ctx context.Context, email, passHash string) (*models.User, error) {
 	var user models.User
 	err := r.DB.QueryRow(ctx,
 		`insert into users 
 		(email, 
 		password_hash) 
 		values ($1, $2) returning id`,
-		user.Email, passHash,
+		email, passHash,
 	).Scan(&user.ID)
 
 	if err != nil {
