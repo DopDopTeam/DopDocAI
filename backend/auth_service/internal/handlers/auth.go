@@ -3,6 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/models"
 	"github.com/DopDopTeam/DopDocAI/auth-service/internal/services"
@@ -29,20 +31,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	loginResult, err := h.auth.Login(req, c.Request.Context())
+	res, err := h.auth.Login(req, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "error"})
 		return
 	}
 
-	h.issueRefreshCookie(c, loginResult.RefreshToken)
+	h.issueRefreshCookie(c, res.RefreshToken)
 
 	c.JSON(http.StatusOK, gin.H{
-		"acces_token": loginResult.AccessToken,
+		"acces_token": res.AccessToken,
 		"token_type":  "bearer",
-		"expires_in":  loginResult.AccessTTL,
-		"user_id":     loginResult.UserID,
-		"email":       loginResult.Email})
+		"expires_in":  res.AccessTTL,
+		"user_id":     res.UserID,
+		"email":       res.Email})
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
@@ -77,6 +79,23 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		"email":       refreshResult.Email})
 }
 
+func (h *AuthHandler) Forward(c *gin.Context) {
+	token := extractToken(c)
+	if token == "" {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	claims, err := h.auth.ParseToken(token, "access")
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+
+	c.Header("X-User-Id", strconv.FormatInt(claims.UserID, 10))
+	c.Status(http.StatusOK)
+}
+
 func (h *AuthHandler) issueRefreshCookie(c *gin.Context, token string) {
 	c.SetCookie(
 		"refresh_token",
@@ -99,4 +118,17 @@ func (h *AuthHandler) clearRefreshCookie(c *gin.Context) {
 		h.cookie.Secure,
 		true,
 	)
+}
+
+func extractToken(c *gin.Context) string {
+	reqToken := c.Request.Header.Get("Authorization")
+	if reqToken == "" {
+		return ""
+	}
+
+	splitToken := strings.Split(reqToken, "Bearer ")
+	if len(splitToken) != 2 {
+		return ""
+	}
+	return splitToken[1]
 }

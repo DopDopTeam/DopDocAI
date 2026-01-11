@@ -9,7 +9,7 @@ import (
 )
 
 type Claims struct {
-	Email     string `json:"email"`
+	UserID    int64  `json:"user_id"`
 	JTI       string `json:"jti"`
 	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
@@ -31,6 +31,14 @@ type LoginResult struct {
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required,min=8"`
+}
+
+type RegisterResult struct {
+	UserID       int64
+	Email        string
+	AccessToken  string
+	RefreshToken string
+	AccessTTL    time.Duration
 }
 
 // type RefreshRequest struct {

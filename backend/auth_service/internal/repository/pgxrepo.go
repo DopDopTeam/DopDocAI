@@ -98,21 +98,22 @@ func (r *PGXUserRepository) GetByID(ctx context.Context, userID int64) (*models.
 	return &user, nil
 }
 
-func (r *PGXUserRepository) CreateUser(ctx context.Context, email, passHash string) (*models.User, error) {
-	var user models.User
+func (r *PGXUserRepository) CreateUser(ctx context.Context, email, passHash string) (int64, error) {
+	var userID int64
 	err := r.DB.QueryRow(ctx,
 		`insert into users 
 		(email, 
 		password_hash) 
 		values ($1, $2) returning id`,
 		email, passHash,
-	).Scan(&user.ID)
+	).Scan(
+		&userID)
 
 	if err != nil {
-		return nil, err
+		return userID, err
 	}
 
-	return &user, nil
+	return userID, nil
 }
 
 func (r *PGXUserRepository) CheckPassword(ctx context.Context, userID int64, password string) (bool, error) {

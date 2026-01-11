@@ -16,11 +16,17 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "")
 		return
 	}
-	user, err := h.auth.CreateUser(req.Email, req.Password, c.Request.Context())
+	res, err := h.auth.RegisterUser(req.Email, req.Password, c.Request.Context())
 	if err != nil {
 		log.WithError(err).Error("Unable to create user")
 		c.JSON(http.StatusInternalServerError, "")
 		return
 	}
-	log.Print(user)
+
+	c.JSON(http.StatusOK, gin.H{
+		"acces_token": res.AccessToken,
+		"token_type":  "bearer",
+		"expires_in":  res.AccessTTL,
+		"user_id":     res.UserID,
+		"email":       res.Email})
 }
