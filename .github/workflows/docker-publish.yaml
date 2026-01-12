@@ -41,6 +41,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y buildah
 
+      - name: Configure container registries
+        run: |
+          sudo mkdir -p /etc/containers
+          sudo tee /etc/containers/registries.conf >/dev/null <<'EOF'
+          unqualified-search-registries = ["docker.io"]
+          EOF
+
       - name: Log in to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
