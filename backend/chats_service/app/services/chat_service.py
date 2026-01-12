@@ -75,8 +75,21 @@ class ChatService:
         ctx.append(LLMMessage(
             role="system",
             content=(
-                "Answer using ONLY the repository context below. "
-                "If the answer is not in the context, say you don't know.\n\n"
+                "Answer using ONLY the repository context below. If the answer is not in the context, say \"I don't know\".\n\n"
+                "CITATIONS (mandatory):\n"
+                "- When you use any fact/code from the context, cite it inline using square brackets with the chunk number, e.g. [2]. "
+                "The number MUST match the chunk headers in the provided context.\n"
+                "- You may cite multiple chunks like [2][5] or [2, 5].\n"
+                "- Do NOT invent citation numbers. Use only numbers that exist in the context.\n"
+                "- Do NOT cite a chunk unless you actually used information from it.\n\n"
+                "SOURCES SECTION (conditional):\n"
+                "- If you included at least one inline citation, add a section named \"Sources:\" at the end of your answer.\n"
+                "- In \"Sources:\", list each cited chunk exactly once, in ascending order.\n"
+                "- For each cited chunk, copy the file path and line range exactly as shown in the chunk header.\n"
+                "  Example: \"- [2] practice/21.10/main.go lines 59-67\"\n"
+                "- Do NOT include scores. Do NOT add anything that is not present in the header.\n"
+                "- If you did not include any inline citations, do NOT output a \"Sources:\" section.\n\n"
+                "Repository context:\n"
                 f"{rag_text}"
             ),
         ))
@@ -88,6 +101,8 @@ class ChatService:
             model=settings.llm_model,
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens,
+            top_p=settings.llm_top_p,
+            repetition_penalty=settings.llm_repetition_penalty,
         )
 
         llm_resp = await self.llm.generate(prompt=content, config=cfg, context=ctx)

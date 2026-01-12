@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     llm_router_api: str = "https://openrouter.ai/api/v1/chat/completions"
     llm_api_key: str = ""
     llm_model: str = "deepseek/deepseek-v3.2"
-    llm_temperature: float = 0.5
-    llm_max_tokens: int = 512
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 1536
+    llm_top_p: float = 0.95
+    llm_repetition_penalty: float = 1.05
     # сколько сообщений истории подмешивать
     llm_history_limit: int = 20
     llm_default_system_prompt: str = "You are a helpful assistant for answering questions related to code repositories."
