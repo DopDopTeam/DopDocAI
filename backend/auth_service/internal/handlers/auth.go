@@ -40,17 +40,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	h.issueRefreshCookie(c, res.RefreshToken)
 
 	c.JSON(http.StatusOK, gin.H{
-		"acces_token": res.AccessToken,
-		"token_type":  "bearer",
-		"expires_in":  res.AccessTTL,
-		"user_id":     res.UserID,
-		"email":       res.Email})
+		"access_token": res.AccessToken,
+		"token_type":   "bearer",
+		"expires_in":   res.AccessTTL,
+		"user_id":      res.UserID,
+		"email":        res.Email})
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	log.Debug("Parsing cookie...")
 	reqToken, err := c.Cookie("refresh_token")
-	log.Println(c.Cookie("resresh_token"))
+	log.Println(c.Cookie("refresh_token"))
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
 			log.Info("Cookie refresh_token not found")
@@ -72,11 +72,11 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	h.issueRefreshCookie(c, refreshResult.RefreshToken)
 
 	c.JSON(http.StatusOK, gin.H{
-		"acces_token": refreshResult.AccessToken,
-		"token_type":  "bearer",
-		"expires_in":  refreshResult.AccessTTL,
-		"user_id":     refreshResult.UserID,
-		"email":       refreshResult.Email})
+		"access_token": refreshResult.AccessToken,
+		"token_type":   "bearer",
+		"expires_in":   refreshResult.AccessTTL,
+		"user_id":      refreshResult.UserID,
+		"email":        refreshResult.Email})
 }
 
 func (h *AuthHandler) Forward(c *gin.Context) {
