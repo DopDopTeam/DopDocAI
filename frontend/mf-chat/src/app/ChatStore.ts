@@ -48,7 +48,6 @@ export class ChatStore {
             this.loading = repoId != null;
             this.sending = false;
         });
-        console.log(authStore.userId);
         if (authStore.userId == null) return;
         if (repoId == null) return;
 

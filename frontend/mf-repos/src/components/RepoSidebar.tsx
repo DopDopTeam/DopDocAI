@@ -41,16 +41,16 @@ export const RepoSidebar = observer(function RepoSidebar() {
 
     async function onAdd() {
         try {
-            const created = await repos.startIndexing(url);
+            await repos.startIndexing(url);
             setUrl("");
             setSnack("Repository indexing started");
-            navigate(`/app/repos/${created.id}`);
         } catch (e) {
             setSnack(e instanceof Error ? e.message : "Failed to add repository");
         }
     }
 
     function onSelect(r: Repository) {
+        if (r.index_state.status !== "done") return;
         navigate(`/app/repos/${r.id}`);
     }
 

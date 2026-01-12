@@ -2,8 +2,7 @@ import React, { useCallback, useState } from "react";
 import { Box, IconButton, Tooltip } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import {MarkdownRenderer} from "./MarkdownRenderer";
 
 export type ChatMessageVM = {
     id: string;
@@ -70,22 +69,19 @@ export function ChatMessageList({
                                 borderRadius: 2,
                                 border: "1px solid rgba(255,255,255,0.12)",
 
-                                // ✅ фон для сообщений пользователя
                                 backgroundColor: isUser ? "rgba(144, 202, 249, 0.12)" : "transparent",
-                                // чуть выделим рамку у user, опционально
                                 borderColor: isUser ? "rgba(144, 202, 249, 0.25)" : "rgba(255,255,255,0.12)",
                             }}
                         >
                             <Box
                                 sx={{
-                                    // чуть нормализуем markdown под чат (опционально, но приятно)
                                     "& p": { m: 0, mb: 1, whiteSpace: "pre-wrap" },
                                     "& p:last-child": { mb: 0 },
                                     "& ul, & ol": { m: 0, pl: 3, mb: 1 },
                                     "& li:last-child": { mb: 0 },
                                 }}
                             >
-                                <Markdown remarkPlugins={[remarkGfm]}>{m.content}</Markdown>
+                                <MarkdownRenderer>{m.content}</MarkdownRenderer>
                             </Box>
                         </Box>
 

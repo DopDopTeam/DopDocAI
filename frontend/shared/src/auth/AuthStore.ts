@@ -66,9 +66,6 @@ export class AuthStore {
             });
             throw e;
         }
-        console.log(this.token);
-        console.log(this.userId);
-        console.log(this.email);
     }
 
     async register(input: RegisterRequest) {
@@ -77,7 +74,6 @@ export class AuthStore {
 
         try {
             const res = await api.post<AuthResponse>(endpoints.auth.register, input);
-            console.log(res);
             runInAction(() => {
                 storage.setToken(res.data.access_token);
                 storage.setUserId(res.data.user_id);
