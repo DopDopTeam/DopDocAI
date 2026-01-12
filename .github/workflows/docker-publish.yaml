@@ -52,7 +52,7 @@ jobs:
         env:
           IMAGE_REPO: ${{ env.REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}
         run: |
-          buildah bud --storage-driver=vfs -f "${{ matrix.dockerfile }}" -t "${IMAGE_REPO}:${GITHUB_SHA}" "${{ matrix.context }}"
+          buildah bud --isolation=chroot --storage-driver=vfs -f "${{ matrix.dockerfile }}" -t "${IMAGE_REPO}:${GITHUB_SHA}" "${{ matrix.context }}"
           buildah push --storage-driver=vfs "${IMAGE_REPO}:${GITHUB_SHA}"
           if [ "${GITHUB_REF_NAME}" = "${{ github.event.repository.default_branch }}" ]; then
             buildah tag "${IMAGE_REPO}:${GITHUB_SHA}" "${IMAGE_REPO}:latest"
