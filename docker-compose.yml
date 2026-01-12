@@ -124,6 +124,8 @@ services:
       DB_DSN: postgres://dopdoc:dopdoc@postgres:5432/auth_db
       JWT_SECRET: secret
       REFRESH_PEPPER: pepper
+      DOMAIN: localhost
+      SECURE: false
     depends_on:
       postgres:
         condition: service_healthy

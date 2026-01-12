@@ -23,6 +23,8 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
+	h.issueRefreshCookie(c, res.RefreshToken)
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token": res.AccessToken,
 		"token_type":   "bearer",
