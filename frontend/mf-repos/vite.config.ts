@@ -11,6 +11,7 @@ export default defineConfig({
       filename: "remoteEntry.js",
       exposes: { "./RepoSidebar": "./src/components/RepoSidebar.tsx" },
       shared: {
+        "@rag/shared": { singleton: true },
         "react": {singleton: true},
         "react-dom": {singleton: true},
         "mobx": {singleton: true},
@@ -35,8 +36,14 @@ export default defineConfig({
         secure: false,
         rewrite: (p) => p.replace(/^\/api/, ""), // /api/chats -> /chats
       },
-      "/api": {
+      "/api/repos": {
         target: "http://localhost:9000",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/api/, ""), // /api/repos -> /repos
+      },
+      "/api/v1/auth": {
+        target: "http://localhost:9200",
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/api/, ""), // /api/repos -> /repos

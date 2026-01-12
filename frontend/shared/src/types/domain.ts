@@ -1,3 +1,5 @@
+export type UUID = string;
+
 export interface Repository {
     id: number;
     url: string;

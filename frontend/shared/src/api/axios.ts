@@ -1,35 +1,87 @@
-import axios, { AxiosError } from "axios";
+import axios from "axios";
+import { endpoints } from "./endpoints";
 import { storage } from "../utils/storage";
+import type { AuthResponse } from "../types/api";
 
-export type OnUnauthorized = () => void;
+let onUnauthorized: (() => void) | null = null;
 
-let onUnauthorized: OnUnauthorized | null = null;
+export function setOnUnauthorized(cb: () => void) {
+    onUnauthorized = cb;
+}
 
-export function setOnUnauthorized(handler: OnUnauthorized) {
-    onUnauthorized = handler;
+declare module "axios" {
+    export interface InternalAxiosRequestConfig {
+        __retried?: boolean;
+    }
 }
 
 export const api = axios.create({
-    baseURL: "/api",
+    baseURL: "/api",         // важно: относительный, чтобы работало из host и из standalone remotes
+    withCredentials: true,   // чтобы cookie refresh_token отправлялась
 });
 
 api.interceptors.request.use((config) => {
-    // const token = storage.getToken();
-    // if (token) {
-    //     config.headers = config.headers ?? {};
-    //     config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = storage.getToken();
+    if (token) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
 });
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+    if (refreshPromise) return refreshPromise;
+
+    refreshPromise = (async () => {
+        try {
+            const res = await api.post<AuthResponse>(endpoints.auth.refresh);
+            storage.setToken(res.data.acces_token);
+            storage.setUserId(res.data.user_id);
+            storage.setEmail(res.data.email);
+            return res.data.acces_token;
+        } catch {
+            storage.clearAuth();
+            onUnauthorized?.();
+            return null;
+        } finally {
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
+}
+
 api.interceptors.response.use(
     (r) => r,
-    (error: AxiosError) => {
-        const status = error.response?.status;
-        if (status === 401) {
-            storage.clearToken();
+    async (err) => {
+        const status = err?.response?.status;
+        const config = err?.config;
+
+        if (!config || status !== 401) throw err;
+
+        const url = String(config.url ?? "");
+
+        // не зацикливаемся на auth endpoints
+        if (url.includes(endpoints.auth.login) || url.includes(endpoints.auth.refresh)) {
+            storage.clearAuth();
             onUnauthorized?.();
+            throw err;
         }
-        return Promise.reject(error);
+
+        if (config.__retried) {
+            storage.clearAuth();
+            onUnauthorized?.();
+            throw err;
+        }
+
+        const newToken = await refreshAccessToken();
+        if (!newToken) throw err;
+
+        config.__retried = true;
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return api.request(config);
     }
 );
