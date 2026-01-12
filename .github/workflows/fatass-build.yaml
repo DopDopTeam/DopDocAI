@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Fatass build (super heavy)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
             image: dopdoc-ingestion-service
             context: .
             dockerfile: backend/ingestion_service/Dockerfile
-            
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
