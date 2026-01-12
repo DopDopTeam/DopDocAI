@@ -30,7 +30,7 @@ jobs:
           - name: auth-service
             image: dopdoc-auth-service
             context: backend/auth_service
-            dockerfile: Dockerfile
+            dockerfile: backend/auth_service/Dockerfile
 
     steps:
       - name: Checkout
