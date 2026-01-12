@@ -79,6 +79,29 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		"email":        refreshResult.Email})
 }
 
+func (h *AuthHandler) Logout(c *gin.Context) {
+	log.Debug("Parsing cookie...")
+	refresh_token, err := c.Cookie("refresh_token")
+	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			log.Info("Cookie refresh_token not found")
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Cookie refresh_token not found"})
+			return
+		}
+		log.WithError(err).Info("Cookie parsed with error")
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to parse cookie"})
+		return
+	}
+
+	if err := h.auth.Logout(refresh_token); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to parse claims"})
+		return
+	}
+
+	h.clearRefreshCookie(c)
+	c.JSON(http.StatusOK, gin.H{"message": "Logout is successfull"})
+}
+
 func (h *AuthHandler) Forward(c *gin.Context) {
 	token := extractToken(c)
 	if token == "" {
