@@ -17,7 +17,11 @@
     "mobx": "^6.13.5",
     "mobx-react-lite": "^4.0.7",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@module-federation/vite": "^1.9.4",

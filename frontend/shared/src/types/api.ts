@@ -1,25 +1,4 @@
-import type { Repository, RepoIndexState, Message, Source } from "./domain";
-
-export interface LoginRequest {
-    username: string;
-    password: string;
-}
-
-export interface LoginResponseDefault {
-    access_token: string;
-}
-
-/**
- * Repos
- */
-export type ListReposResponse = Repository[]; // ВАЖНО: теперь массив
-
-export interface RepositoryUpsertRequest {
-    url: string;
-    slug: string;
-    default_branch?: string | null;
-}
-export type RepositoryUpsertResponse = Repository;
+import {UUID, RepoIndexStatus, MessageRole} from "./domain";
 
 export interface RepoIngestRequest {
     repo_url: string;
@@ -32,29 +11,15 @@ export interface RepoIngestResponse {
     vectors_upserted: number;
     repository_id: number;
     repo_index_state_id: number;
-    status: string; // "queued" и т.п.
+    status: RepoIndexStatus;
 }
 
-/**
- * Repo index states
- */
 export interface RepoIndexStateCreateIn {
     user_id: number;
     repository_id: number;
     branch?: string | null;
     qdrant_collection: string;
 }
-export type RepoIndexStateCreateResponse = RepoIndexState;
-
-export interface RepoIndexStatePatchIn {
-    status?: string | null;
-    vectors_upserted?: number | null;
-    last_error?: string | null;
-    indexed_at?: string | null;
-}
-export type RepoIndexStatePatchResponse = RepoIndexState;
-
-export type UUID = string;
 
 export type ChatResponse = {
     id: UUID;
@@ -65,7 +30,7 @@ export type ChatResponse = {
 export type MessageResponse = {
     id: UUID;
     chat_id: UUID;
-    role: "user" | "assistant" | string;
+    role: MessageRole;
     content: string;
 };
 
@@ -80,3 +45,22 @@ export type SendMessageResponse = {
     provider: string;
     finish_reason?: string | null;
 };
+
+export interface LoginRequest {
+    email: string;
+    password: string;
+}
+
+export interface RegisterRequest {
+    email: string;
+    password: string;
+}
+
+export interface AuthResponse {
+    access_token: string;
+    token_type: "bearer" | string;
+    expires_in: number;
+    user_id: number;
+    email: string;
+}
+
