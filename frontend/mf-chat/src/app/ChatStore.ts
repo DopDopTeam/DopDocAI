@@ -1,5 +1,5 @@
-import { makeAutoObservable, runInAction } from "mobx";
-import {api, endpoints} from "@rag/shared";
+import {makeAutoObservable, runInAction} from "mobx";
+import {api, authStore, endpoints} from "@rag/shared";
 import type {
     Repository,
     ChatResponse,
@@ -24,14 +24,11 @@ export class ChatStore {
     sending = false;
     error: string | null = null;
 
-    // заглушка, пока нет auth middleware
-    userId = 1;
-
     private loadSeq = 0;
     private sendSeq = 0;
 
     constructor() {
-        makeAutoObservable(this, {}, { autoBind: true });
+        makeAutoObservable(this, {}, {autoBind: true});
     }
 
     get isBlocked() {
@@ -51,12 +48,13 @@ export class ChatStore {
             this.loading = repoId != null;
             this.sending = false;
         });
-
+        console.log(authStore.userId);
+        if (authStore.userId == null) return;
         if (repoId == null) return;
 
         try {
             // 1) repo meta (нужен slug)
-            const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: { user_id: this.userId }});
+            const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: {user_id: authStore.userId}});
             if (seq !== this.loadSeq || this.repoId !== repoId) return;
 
             runInAction(() => {
@@ -85,9 +83,12 @@ export class ChatStore {
     }
 
     private async ensureChat(repoId: number, seq: number): Promise<string | null> {
+
+        if (authStore.userId == null) return null;
+
         // сначала пробуем list (вдруг уже создан)
         const listRes = await api.get<ChatResponse[]>(endpoints.chats.list, {
-            params: { user_id: this.userId, repo_id: repoId },
+            params: {user_id: authStore.userId, repo_id: repoId},
         });
 
         if (seq !== this.loadSeq || this.repoId !== repoId) return null;
@@ -102,7 +103,7 @@ export class ChatStore {
 
         // иначе create
         const createRes = await api.post<ChatResponse>(endpoints.chats.create, {
-            user_id: this.userId,
+            user_id: authStore.userId,
             repo_id: repoId,
         });
 
@@ -117,7 +118,7 @@ export class ChatStore {
 
     private async loadMessages(chatId: string, seq: number) {
         const res = await api.get<MessageResponse[]>(endpoints.chats.messages(chatId), {
-            params: { limit: 200, offset: 0 },
+            params: {limit: 200, offset: 0},
         });
 
         if (seq !== this.loadSeq) return;
@@ -176,7 +177,7 @@ export class ChatStore {
         });
 
         try {
-            const req: SendMessageRequest = { content: trimmed };
+            const req: SendMessageRequest = {content: trimmed};
 
             const res = await api.post<SendMessageResponse>(endpoints.chats.send(chatId), req);
 
@@ -208,7 +209,7 @@ export class ChatStore {
             if (seq !== this.sendSeq) return;
             runInAction(() => {
                 this.messages = this.messages.map((m) =>
-                    m.id === placeholderId ? { ...m, content: "Ошибка при получении ответа" } : m
+                    m.id === placeholderId ? {...m, content: "Ошибка при получении ответа"} : m
                 );
                 this.sending = false;
                 this.error = "Failed to send message";

@@ -53,6 +53,12 @@ export default defineConfig({
                 secure: false,
                 rewrite: (p) => p.replace(/^\/api/, ""), // /api/repos -> /repos
             },
+            "/api/repo-index-states": {
+                target: "http://localhost:9000",
+                changeOrigin: true,
+                secure: false,
+                rewrite: (p) => p.replace(/^\/api/, ""), // /api/repos -> /repos
+            },
             "/api/v1/auth": {
                 target: "http://localhost:9200",
                 changeOrigin: true,

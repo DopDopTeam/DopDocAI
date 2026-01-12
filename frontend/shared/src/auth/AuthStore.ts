@@ -1,7 +1,7 @@
-import { makeAutoObservable, runInAction } from "mobx";
-import { api } from "../api/axios";
-import { endpoints } from "../api/endpoints";
-import { storage } from "../utils/storage";
+import {makeAutoObservable, runInAction} from "mobx";
+import {api} from "../api/axios";
+import {endpoints} from "../api/endpoints";
+import {storage} from "../utils/storage";
 import type {AuthResponse, LoginRequest, RegisterRequest} from "../types/api";
 
 export class AuthStore {
@@ -14,7 +14,7 @@ export class AuthStore {
     error: string | null = null;
 
     constructor() {
-        makeAutoObservable(this, {}, { autoBind: true });
+        makeAutoObservable(this, {}, {autoBind: true});
 
         storage.onTokenChange(() => {
             runInAction(() => {
@@ -53,11 +53,12 @@ export class AuthStore {
             const res = await api.post<AuthResponse>(endpoints.auth.login, input);
 
             runInAction(() => {
-                storage.setToken(res.data.acces_token);
+                storage.setToken(res.data.access_token);
                 storage.setUserId(res.data.user_id);
                 storage.setEmail(res.data.email);
                 this.loading = false;
             });
+
         } catch (e) {
             runInAction(() => {
                 this.error = "Login failed";
@@ -65,6 +66,9 @@ export class AuthStore {
             });
             throw e;
         }
+        console.log(this.token);
+        console.log(this.userId);
+        console.log(this.email);
     }
 
     async register(input: RegisterRequest) {
@@ -73,9 +77,9 @@ export class AuthStore {
 
         try {
             const res = await api.post<AuthResponse>(endpoints.auth.register, input);
-
+            console.log(res);
             runInAction(() => {
-                storage.setToken(res.data.acces_token);
+                storage.setToken(res.data.access_token);
                 storage.setUserId(res.data.user_id);
                 storage.setEmail(res.data.email);
                 this.loading = false;
@@ -92,7 +96,7 @@ export class AuthStore {
     async refresh() {
         try {
             const res = await api.post<AuthResponse>(endpoints.auth.refresh);
-            storage.setToken(res.data.acces_token);
+            storage.setToken(res.data.access_token);
             storage.setUserId(res.data.user_id);
             storage.setEmail(res.data.email);
         } catch {

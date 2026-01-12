@@ -57,7 +57,7 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-    acces_token: string;
+    access_token: string;
     token_type: "bearer" | string;
     expires_in: number;
     user_id: number;

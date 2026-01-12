@@ -37,10 +37,10 @@ async function refreshAccessToken(): Promise<string | null> {
     refreshPromise = (async () => {
         try {
             const res = await api.post<AuthResponse>(endpoints.auth.refresh);
-            storage.setToken(res.data.acces_token);
+            storage.setToken(res.data.access_token);
             storage.setUserId(res.data.user_id);
             storage.setEmail(res.data.email);
-            return res.data.acces_token;
+            return res.data.access_token;
         } catch {
             storage.clearAuth();
             onUnauthorized?.();

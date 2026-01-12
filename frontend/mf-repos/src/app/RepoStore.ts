@@ -1,11 +1,10 @@
-import { makeAutoObservable, runInAction } from "mobx";
-import { api, endpoints } from "@rag/shared";
+import {makeAutoObservable, runInAction, toJS} from "mobx";
+import {api, endpoints, authStore} from "@rag/shared";
 import type {
     Repository,
     RepoIndexState,
     RepoIngestRequest,
     RepoIngestResponse,
-    RepoIndexStateCreateIn,
 } from "@rag/shared";
 
 export class RepoStore {
@@ -19,27 +18,24 @@ export class RepoStore {
     private statusTimer: number | null = null;
     private statusesInFlight = false;
 
-    // TODO: взять из auth/JWT
-    userId = 1;
-
     constructor() {
         makeAutoObservable(this);
     }
 
-    /** вызывай один раз при заходе на страницу */
     async init() {
         await this.loadReposList();
         this.startStatusPolling();
         void this.refreshStatuses({ ensureStateId: false });
     }
 
-    /** грузим только список реп (без статусов) */
     async loadReposList() {
         this.loadingList = true;
         this.error = null;
 
         try {
-            const res = await api.get<Repository[]>(endpoints.repos.list(this.userId));
+            if (!authStore?.userId) throw new Error("User fucked");
+
+            const res = await api.get<Repository[]>(endpoints.repos.list(authStore.userId));
             runInAction(() => {
                 this.repos = res.data;
                 this.loadingList = false;
@@ -53,27 +49,6 @@ export class RepoStore {
         }
     }
 
-    private qdrantCollectionFor(repo: Repository): string {
-        return `rag_repo_${repo.id}`;
-    }
-
-    /**
-     * Создаёт/находит state по (user_id, repository_id, branch, qdrant_collection)
-     * и возвращает state (там есть id).
-     */
-    private async createOrGetIndexState(repo: Repository): Promise<RepoIndexState> {
-        const payload: RepoIndexStateCreateIn = {
-            user_id: this.userId,
-            repository_id: repo.id,
-            branch: repo.default_branch,
-            qdrant_collection: this.qdrantCollectionFor(repo),
-        };
-
-        const res = await api.post<RepoIndexState>(endpoints.repoIndexStates.createOrGet, payload);
-        return res.data;
-    }
-
-    /** Обновление статусов отдельно от списка реп */
     async refreshStatuses(opts?: { ensureStateId?: boolean }) {
         if (this.statusesInFlight) return;
         if (this.repos.length === 0) return;
@@ -119,26 +94,21 @@ export class RepoStore {
         this.statusTimer = null;
     }
 
-    /**
-     * Добавление репозитория:
-     * 1) upsert в repos-service
-     * 2) старт индексации через ingestion-service
-     * 3) обновляем список локально (или можно перезагрузить list — на твой вкус)
-     * 4) подтягиваем свежий state по repo_index_state_id
-     */
     async startIndexing(url: string, default_branch: string | null = null) {
         this.error = null;
+
+        if (!authStore?.userId) throw new Error("User fucked");
 
         const ingestPayload: RepoIngestRequest = {
             repo_url: url,
             branch: default_branch,
-            user_id: this.userId,
+            user_id: authStore.userId,
         };
 
         const ingestRes = await api.post<RepoIngestResponse>(endpoints.ingest, ingestPayload);
 
         const repoId = ingestRes.data.repository_id;
-        const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: { user_id: this.userId }});
+        const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: { user_id: authStore.userId }});
         const repo = repoRes.data;
 
         runInAction(() => {
