@@ -10,6 +10,8 @@ class LLMConfig:
     model: str
     temperature: float
     max_tokens: int
+    top_p: float
+    repetition_penalty: float
 
 
 '''
@@ -83,6 +85,8 @@ class LLMRouter:
                     "messages": messages,
                     "temperature": config.temperature,
                     "max_tokens": config.max_tokens,
+                    "top_p" : config.top_p,
+                    "repetition_penalty": config.repetition_penalty,
                 },
             )
 
