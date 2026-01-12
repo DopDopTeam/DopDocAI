@@ -24,9 +24,9 @@ func (h *AuthHandler) RegisterUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"acces_token": res.AccessToken,
-		"token_type":  "bearer",
-		"expires_in":  res.AccessTTL,
-		"user_id":     res.UserID,
-		"email":       res.Email})
+		"access_token": res.AccessToken,
+		"token_type":   "bearer",
+		"expires_in":   res.AccessTTL,
+		"user_id":      res.UserID,
+		"email":        res.Email})
 }
