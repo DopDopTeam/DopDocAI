@@ -6,9 +6,10 @@ export interface Repository {
     last_indexed_at: string | null;
     created_at: string;
     updated_at: string;
+    index_state: RepoIndexState;
 }
 
-export type RepoIndexStatus = "new" | "indexing" | "ready" | "error" | string;
+export type RepoIndexStatus = "queued" | "processing" | "done" | "failed" | string;
 
 export interface RepoIndexState {
     id: number;
@@ -46,10 +47,3 @@ export interface Message {
     created_at?: string;
     sources?: Source[];
 }
-
-/**
- * Удобный тип для UI: репозиторий + его текущий индекс-стейт (опционально)
- */
-export type RepoWithIndexState = Repository & {
-    index_state?: RepoIndexState;
-};

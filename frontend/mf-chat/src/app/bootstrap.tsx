@@ -1,5 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "highlight.js/styles/github.css";
+
 import { CssBaseline, ThemeProvider } from "@mui/material";
 import {theme, setOnUnauthorized } from "@rag/shared";
 import { ChatPanel } from "../components/ChatPanel";

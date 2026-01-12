@@ -15,7 +15,7 @@ function makeTempId(prefix: string) {
 
 export class ChatStore {
     repoId: number | null = null;
-    repoSlug: string | null = null;
+    repo: Repository | null = null;
 
     chatId: string | null = null;
 
@@ -35,7 +35,7 @@ export class ChatStore {
     }
 
     get isBlocked() {
-        return this.repoId == null;
+        return this.repoId == null || this.repo?.index_state.status !== "done";
     }
 
     /** Вызывается при смене route param */
@@ -44,7 +44,7 @@ export class ChatStore {
 
         runInAction(() => {
             this.repoId = repoId;
-            this.repoSlug = null;
+            this.repo = null;
             this.chatId = null;
             this.messages = [];
             this.error = null;
@@ -56,11 +56,11 @@ export class ChatStore {
 
         try {
             // 1) repo meta (нужен slug)
-            const repoRes = await api.get<Repository>(endpoints.repos.get(repoId));
+            const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: { user_id: this.userId }});
             if (seq !== this.loadSeq || this.repoId !== repoId) return;
 
             runInAction(() => {
-                this.repoSlug = repoRes.data.slug;
+                this.repo = repoRes.data;
             });
 
             // 2) найти существующий чат (если есть), иначе создать
@@ -87,7 +87,7 @@ export class ChatStore {
     private async ensureChat(repoId: number, seq: number): Promise<string | null> {
         // сначала пробуем list (вдруг уже создан)
         const listRes = await api.get<ChatResponse[]>(endpoints.chats.list, {
-            params: { user_id: this.userId, repo_id: repoId, limit: 1, offset: 0 },
+            params: { user_id: this.userId, repo_id: repoId },
         });
 
         if (seq !== this.loadSeq || this.repoId !== repoId) return null;
@@ -220,7 +220,7 @@ export class ChatStore {
     reset() {
         runInAction(() => {
             this.repoId = null;
-            this.repoSlug = null;
+            this.repo = null;
             this.chatId = null;
             this.messages = [];
             this.error = null;

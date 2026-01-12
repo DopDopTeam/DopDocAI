@@ -5,6 +5,10 @@ import {theme, setOnUnauthorized} from "@rag/shared";
 import { RouterProvider } from "react-router-dom";
 import { createAppRouter } from "./app/router";
 import {AuthStore} from "./app/AuthStore";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/600.css";
 
 setOnUnauthorized(() => console.warn("401 (auth disabled)"));
 

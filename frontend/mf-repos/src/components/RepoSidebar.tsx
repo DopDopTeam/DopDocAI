@@ -14,8 +14,8 @@ import {
     Snackbar,
     Alert,
 } from "@mui/material";
-import type { RepoWithIndexState } from "@rag/shared";
 import { repoStore } from "../app/store";
+import {Repository} from "@rag/shared";
 
 function statusColor(status?: string): "default" | "warning" | "success" | "error" {
     if (status === "done") return "success";
@@ -44,13 +44,13 @@ export const RepoSidebar = observer(function RepoSidebar() {
             const created = await repos.startIndexing(url);
             setUrl("");
             setSnack("Repository indexing started");
-            navigate(`/app/repos/${created.repo.id}`);
+            navigate(`/app/repos/${created.id}`);
         } catch (e) {
             setSnack(e instanceof Error ? e.message : "Failed to add repository");
         }
     }
 
-    function onSelect(r: RepoWithIndexState) {
+    function onSelect(r: Repository) {
         navigate(`/app/repos/${r.id}`);
     }
 

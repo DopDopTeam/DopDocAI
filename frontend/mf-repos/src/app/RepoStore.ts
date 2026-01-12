@@ -3,14 +3,13 @@ import { api, endpoints } from "@rag/shared";
 import type {
     Repository,
     RepoIndexState,
-    RepoWithIndexState,
     RepoIngestRequest,
     RepoIngestResponse,
     RepoIndexStateCreateIn,
 } from "@rag/shared";
 
 export class RepoStore {
-    repos: RepoWithIndexState[] = [];
+    repos: Repository[] = [];
 
     loadingList = false;
     loadingStatuses = false;
@@ -31,7 +30,7 @@ export class RepoStore {
     async init() {
         await this.loadReposList();
         this.startStatusPolling();
-        void this.refreshStatuses({ ensureStateId: true });
+        void this.refreshStatuses({ ensureStateId: false });
     }
 
     /** грузим только список реп (без статусов) */
@@ -41,14 +40,8 @@ export class RepoStore {
 
         try {
             const res = await api.get<Repository[]>(endpoints.repos.list(this.userId));
-
             runInAction(() => {
-                // сохраняем список реп, но стараемся не убить уже имеющиеся index_state
-                const prevById = new Map(this.repos.map((r) => [r.id, r]));
-                this.repos = res.data.map((repo) => {
-                    const prev = prevById.get(repo.id);
-                    return prev ? { ...repo, index_state: prev.index_state } : ({ ...repo } as RepoWithIndexState);
-                });
+                this.repos = res.data;
                 this.loadingList = false;
             });
         } catch (e) {
@@ -91,15 +84,7 @@ export class RepoStore {
         try {
             const updates = await Promise.all(
                 this.repos.map(async (repo) => {
-                    // 1) если stateId неизвестен — при необходимости создаём/получаем
                     let state = repo.index_state;
-                    if (!state?.id) {
-                        if (!opts?.ensureStateId) return null;
-                        state = await this.createOrGetIndexState(repo);
-                        return { repoId: repo.id, state };
-                    }
-
-                    // 2) если stateId известен — просто GET и обновляем
                     const res = await api.get<RepoIndexState>(endpoints.repoIndexStates.get(state.id));
                     return { repoId: repo.id, state: res.data };
                 })
@@ -113,8 +98,6 @@ export class RepoStore {
                 });
             });
         } catch {
-            // для polling лучше не орать на пользователя каждую итерацию
-            // но можно залогировать где-то
         } finally {
             runInAction(() => {
                 this.loadingStatuses = false;
@@ -155,26 +138,21 @@ export class RepoStore {
         const ingestRes = await api.post<RepoIngestResponse>(endpoints.ingest, ingestPayload);
 
         const repoId = ingestRes.data.repository_id;
-        const repoRes = await api.get<Repository>(endpoints.repos.get(repoId));
+        const repoRes = await api.get<Repository>(endpoints.repos.get(repoId), {params: { user_id: this.userId }});
         const repo = repoRes.data;
 
-        const stateId = ingestRes.data.repo_index_state_id;
-        const stateRes = await api.get<RepoIndexState>(endpoints.repoIndexStates.get(stateId));
-        const state = stateRes.data;
-
         runInAction(() => {
-            const view: RepoWithIndexState = { ...repo, index_state: state };
-            const idx = this.repos.findIndex((r) => r.id === view.id);
+            const idx = this.repos.findIndex((r) => r.id === repo.id);
             if (idx >= 0) {
-                this.repos = [view, ...this.repos.slice(0, idx), ...this.repos.slice(idx + 1)];
+                this.repos = [repo, ...this.repos.slice(0, idx), ...this.repos.slice(idx + 1)];
             } else {
-                this.repos = [view, ...this.repos];
+                this.repos = [repo, ...this.repos];
             }
         });
 
         this.startStatusPolling();
 
-        return { repo, state };
+        return repo;
     }
 
     dispose() {
