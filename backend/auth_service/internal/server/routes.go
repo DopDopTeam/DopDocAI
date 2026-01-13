@@ -21,7 +21,7 @@ func setupRoutes(r *gin.Engine, authH *handlers.AuthHandler, healthH *handlers.H
 		auth.POST("/login", authH.Login)
 		auth.POST("/refresh", authH.Refresh)
 		auth.POST("/register", authH.RegisterUser)
-		auth.POST("/forward", authH.Forward)
+		auth.Any("/forward", authH.Forward)
 		auth.POST("/logout", authH.Logout)
 	}
 }
