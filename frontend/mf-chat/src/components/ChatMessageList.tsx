@@ -1,11 +1,30 @@
-import React from "react";
-import { Box, Typography } from "@mui/material";
+import React, { useCallback, useState } from "react";
+import { Box, IconButton, Tooltip } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+
+import {MarkdownRenderer} from "./MarkdownRenderer";
 
 export type ChatMessageVM = {
     id: string;
     role: "user" | "assistant";
     content: string;
 };
+
+async function copyToClipboard(text: string) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return;
+    } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+    }
+}
 
 export function ChatMessageList({
                                     messages,
@@ -16,33 +35,68 @@ export function ChatMessageList({
     loading: boolean;
     bottomRef: React.RefObject<HTMLDivElement>;
 }) {
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const onCopy = useCallback(async (id: string, text: string) => {
+        await copyToClipboard(text);
+        setCopiedId(id);
+        window.setTimeout(() => {
+            setCopiedId((cur) => (cur === id ? null : cur));
+        }, 1200);
+    }, []);
+
     return (
         <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", pr: 1, opacity: loading ? 0.7 : 1 }}>
-            {messages.map((m) => (
-                <Box
-                    key={m.id}
-                    sx={{
-                        mb: 2,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: m.role === "user" ? "flex-end" : "flex-start",
-                    }}
-                >
+            {messages.map((m) => {
+                const isAssistant = m.role === "assistant";
+                const isUser = m.role === "user";
+
+                return (
                     <Box
+                        key={m.id}
                         sx={{
-                            maxWidth: "900px",
-                            width: "fit-content",
-                            p: 1.5,
-                            borderRadius: 2,
-                            border: "1px solid rgba(255,255,255,0.12)",
+                            mb: 2,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: isUser ? "flex-end" : "flex-start",
                         }}
                     >
-                        <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                            {m.content}
-                        </Typography>
+                        <Box
+                            sx={{
+                                maxWidth: "900px",
+                                width: "fit-content",
+                                p: 1.5,
+                                borderRadius: 2,
+                                border: "1px solid rgba(255,255,255,0.12)",
+
+                                backgroundColor: isUser ? "rgba(144, 202, 249, 0.12)" : "transparent",
+                                borderColor: isUser ? "rgba(144, 202, 249, 0.25)" : "rgba(255,255,255,0.12)",
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    "& p": { m: 0, mb: 1, whiteSpace: "pre-wrap" },
+                                    "& p:last-child": { mb: 0 },
+                                    "& ul, & ol": { m: 0, pl: 3, mb: 1 },
+                                    "& li:last-child": { mb: 0 },
+                                }}
+                            >
+                                <MarkdownRenderer>{m.content}</MarkdownRenderer>
+                            </Box>
+                        </Box>
+
+                        {isAssistant && (
+                            <Box sx={{ mt: 0.75, maxWidth: "900px", width: "fit-content", display: "flex", gap: 1 }}>
+                                <Tooltip title={copiedId === m.id ? "Copied" : "Copy"}>
+                                    <IconButton size="small" onClick={() => void onCopy(m.id, m.content)}>
+                                        <ContentCopyIcon fontSize="inherit" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        )}
                     </Box>
-                </Box>
-            ))}
+                );
+            })}
 
             <div ref={bottomRef} />
         </Box>

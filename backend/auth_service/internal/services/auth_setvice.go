@@ -221,6 +221,21 @@ func (s *AuthService) ParseToken(tokenString string, tokenType string) (*models.
 	return &claims, nil
 }
 
+func (s *AuthService) Logout(refresh_token string) error {
+	claims, err := s.ParseToken(refresh_token, "refresh")
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"user_id":    claims.UserID,
+		"jti":        claims.JTI,
+		"token_type": claims.TokenType,
+	}).Debug("Parsed token claims")
+
+	return nil
+}
+
 func (s *AuthService) stringToHash(a string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(a), s.hashCost)
 	if err != nil {

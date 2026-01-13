@@ -2,8 +2,9 @@
 
 export const endpoints = {
     auth: {
-        // Can be changed to "/auth/login" etc.
-        login: "/auth/login"
+        login: "/v1/auth/login",
+        refresh: "/v1/auth/refresh",
+        register: "/v1/auth/register",
     },
     repos: {
         list: (userId: number) => `/repos/${userId}/list`,

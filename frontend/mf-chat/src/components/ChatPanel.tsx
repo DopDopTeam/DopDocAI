@@ -33,7 +33,7 @@ export const ChatPanel = observer(function ChatPanel() {
 
     return (
         <ChatRoot>
-            <ChatHeader repoSlug={chat.repoSlug} />
+            <ChatHeader repoSlug={chat.repo?.slug} />
 
             <Divider sx={{ my: 2 }} />
 
