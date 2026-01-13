@@ -33,7 +33,7 @@ services:
   ingestion_service:
     build:
       context: .
-      dockerfile: backend/ingestion_service/Dockerfile
+      dockerfile: backend/ingestion_service/Dockerfile.dev
     container_name: dopdoc_ingestion_service
     environment:
       INGEST_REPOS_SERVICE_URL: http://repos_service:9000
@@ -65,7 +65,7 @@ services:
   repos_service:
     build:
       context: .
-      dockerfile: backend/repos_service/Dockerfile
+      dockerfile: backend/repos_service/Dockerfile.dev
     container_name: dopdoc_repos_service
     environment:
       REPOS_DATABASE_URL: postgresql+psycopg://dopdoc:dopdoc@postgres:5432/dopdoc
@@ -83,7 +83,7 @@ services:
   chats_service:
     build:
       context: .
-      dockerfile: backend/chats_service/Dockerfile
+      dockerfile: backend/chats_service/Dockerfile.dev
     container_name: dopdoc_chats_service
     environment:
       CHATS_DATABASE_URL: postgresql+psycopg://dopdoc:dopdoc@postgres:5432/dopdoc

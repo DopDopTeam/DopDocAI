@@ -6,15 +6,15 @@ from tree_sitter import Language, Parser
 
 # import grammars you need here
 import tree_sitter_go
-import tree_sitter_html
-import tree_sitter_json
+# import tree_sitter_html
+# import tree_sitter_json
 # import tree_sitter_typescript
-import tree_sitter_toml
-import tree_sitter_yaml
+# import tree_sitter_toml
+# import tree_sitter_yaml
 
-import tree_sitter_dockerfile
-import tree_sitter_markdown
-import tree_sitter_css
+# import tree_sitter_dockerfile
+# import tree_sitter_markdown
+# import tree_sitter_css
 
 
 class TreeSitterManager:
@@ -33,14 +33,14 @@ class TreeSitterManager:
         # build the language registry (key -> Language)
         self._language_registry: Dict[str, Language] = {
             "go": Language(tree_sitter_go.language()),
-            "html": Language(tree_sitter_html.language()),
-            "json": Language(tree_sitter_json.language()),
+            # "html": Language(tree_sitter_html.language()),
+            # "json": Language(tree_sitter_json.language()),
             # "typescript": Language(tree_sitter_typescript.language()), # fix no language() in ts library
-            "toml": Language(tree_sitter_toml.language()),
-            "yaml": Language(tree_sitter_yaml.language()),
-            "dockerfile": Language(tree_sitter_dockerfile.language()),
-            "markdown": Language(tree_sitter_markdown.language()),
-            "css": Language(tree_sitter_css.language()),
+            # "toml": Language(tree_sitter_toml.language()),
+            # "yaml": Language(tree_sitter_yaml.language()),
+            # "dockerfile": Language(tree_sitter_dockerfile.language()),
+            # "markdown": Language(tree_sitter_markdown.language()),
+            # "css": Language(tree_sitter_css.language()),
         }
 
         # extension -> key mapping
